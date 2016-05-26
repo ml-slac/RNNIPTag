@@ -1,2 +1,2 @@
 # RNNIPTag
-RNN based $b$-tagging algorithm
+RNN based b-tagging algorithm
