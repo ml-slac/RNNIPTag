@@ -13,7 +13,7 @@ import sorting_funcs
 from copy import deepcopy
 from math import sqrt
 
-Njets = 3000000
+Njets = 5000000
 Nevents = int(1.0*Njets / 5.0)  #assume 5 jets per event
 
 outfileName = "Dataset_IP3D_pTFrac_dR_5m_CMix_MV2C20.pkl"
@@ -24,9 +24,8 @@ outfileName = "Dataset_V47_IP3D_pTFrac_d0_z0_5m.pkl"
 
 #outfileName = "Dataset_V47_IP3D_pTFrac_dR_sl0order_5m.pkl"
 #outfileName = "Dataset_V47_IP3D_pTFrac_dR_5m.pkl"
-#outfileName = "Dataset_V47_IP3D_pTFrac_dR_reverse_sd0order_5m.pkl"
+outfileName = "Dataset_V47_IP3D_pTFrac_dR_reverse_sd0order_5m.pkl"
 #outfileName = "Dataset_V47_IP3D_pTFrac_dR_sv1_5m.pkl"
-outfileName = "Dataset_V47_IP3D_pTFrac_dR_hits_3m.pkl"
 
 ##################
 print "- Making File List"
@@ -77,18 +76,6 @@ for fname in ROOTfileNames:
         theta_raw =  rnp.tree2array(tree, "jet_trk_theta",  stop=Nleft).flatten()
         phi_raw =  rnp.tree2array(tree, "jet_trk_phi",  stop=Nleft).flatten()
 
-        nInnHits_raw =  rnp.tree2array(tree, "jet_trk_nInnHits",  stop=Nleft).flatten()
-        nNextToInnHits_raw =  rnp.tree2array(tree, "jet_trk_nNextToInnHits",  stop=Nleft).flatten()
-        nsplitBLHits_raw =  rnp.tree2array(tree, "jet_trk_nsplitBLHits",  stop=Nleft).flatten()
-        nsplitPixHits_raw =  rnp.tree2array(tree, "jet_trk_nsplitPixHits",  stop=Nleft).flatten()
-        nBLHits_raw =  rnp.tree2array(tree, "jet_trk_nBLHits",  stop=Nleft).flatten()
-        nPixHits_raw =  rnp.tree2array(tree, "jet_trk_nPixHits",  stop=Nleft).flatten()
-        nSCTHits_raw =  rnp.tree2array(tree, "jet_trk_nSCTHits",  stop=Nleft).flatten()
-        nsharedBLHits_raw =  rnp.tree2array(tree, "jet_trk_nsharedBLHits",  stop=Nleft).flatten()
-        nsharedPixHits_raw =  rnp.tree2array(tree, "jet_trk_nsharedPixHits",  stop=Nleft).flatten()
-        nsharedSCTHits_raw =  rnp.tree2array(tree, "jet_trk_nsharedSCTHits",  stop=Nleft).flatten()
-        expectBLayerHit_raw =  rnp.tree2array(tree, "jet_trk_expectBLayerHit",  stop=Nleft).flatten()
-
         print "- sorting per track info"
         sd0_arr = None
         sz0_arr = None
@@ -104,24 +91,11 @@ for fname in ROOTfileNames:
         dtheta_arr = None
         dphi_arr = None
         dR_arr = None
-
-        nInnHits_arr =  None
-        nNextToInnHits_arr = None
-        nsplitBLHits_arr =  None
-        nsplitPixHits_arr =  None
-        nBLHits_arr =  None
-        nPixHits_arr =  None
-        nSCTHits_arr =  None
-        nsharedBLHits_arr =  None
-        nsharedPixHits_arr =  None
-        nsharedSCTHits_arr =  None
-        expectBLayerHit_arr = None
-
         for i in range(len(sd0_raw)):
             ################ sorting variable #######################
             #index_list = sorting_funcs.get_sort_index_list( sd0_raw[i].flatten()*sd0_raw[i].flatten()+sz0_raw[i].flatten()*sz0_raw[i].flatten(), sort_type="absrev" )
-            index_list = sorting_funcs.get_sort_index_list( sd0_raw[i].flatten(),  sort_type="absrev" )
-            #index_list = sorting_funcs.get_sort_index_list( sd0_raw[i].flatten(),  sort_type="abs" )
+            #index_list = sorting_funcs.get_sort_index_list( sd0_raw[i].flatten(),  sort_type="absrev" )
+            index_list = sorting_funcs.get_sort_index_list( sd0_raw[i].flatten(),  sort_type="abs" )
             ################ sorting variable #######################
             mask_list = sorting_funcs.get_neg_mask_list( sorting_funcs.sort_arrays_in_list(grade_raw[i].flatten(), index_list) )
 
@@ -136,18 +110,6 @@ for fname in ROOTfileNames:
             theta_sort = sorting_funcs.sort_arrays_in_list(theta_raw[i].flatten(), index_list, mask_list)
             phi_sort =   sorting_funcs.sort_arrays_in_list(phi_raw[i].flatten(), index_list, mask_list)
 
-            nInnHits_sort =  sorting_funcs.sort_arrays_in_list(nInnHits_raw[i].flatten(), index_list, mask_list)
-            nNextToInnHits_sort = sorting_funcs.sort_arrays_in_list(nNextToInnHits_raw[i].flatten(), index_list, mask_list)
-            nsplitBLHits_sort =  sorting_funcs.sort_arrays_in_list(nsplitBLHits_raw[i].flatten(), index_list, mask_list)
-            nsplitPixHits_sort =  sorting_funcs.sort_arrays_in_list(nsplitPixHits_raw[i].flatten(), index_list, mask_list)
-            nBLHits_sort =  sorting_funcs.sort_arrays_in_list(nBLHits_raw[i].flatten(), index_list, mask_list)
-            nPixHits_sort =  sorting_funcs.sort_arrays_in_list(nPixHits_raw[i].flatten(), index_list, mask_list)
-            nSCTHits_sort =  sorting_funcs.sort_arrays_in_list(nSCTHits_raw[i].flatten(), index_list, mask_list)
-            nsharedBLHits_sort =  sorting_funcs.sort_arrays_in_list(nsharedBLHits_raw[i].flatten(), index_list, mask_list)
-            nsharedPixHits_sort =  sorting_funcs.sort_arrays_in_list(nsharedPixHits_raw[i].flatten(), index_list, mask_list)
-            nsharedSCTHits_sort =  sorting_funcs.sort_arrays_in_list(nsharedSCTHits_raw[i].flatten(), index_list, mask_list)
-            expectBLayerHit_sort = sorting_funcs.sort_arrays_in_list(expectBLayerHit_raw[i].flatten(), index_list, mask_list)
-
 
             if i==0:
                 sd0_arr =   sd0_sort
@@ -161,18 +123,6 @@ for fname in ROOTfileNames:
                 theta_arr = theta_sort
                 phi_arr =   phi_sort
 
-                nInnHits_arr =  nInnHits_sort
-                nNextToInnHits_arr = nNextToInnHits_sort
-                nsplitBLHits_arr =  nsplitBLHits_sort
-                nsplitPixHits_arr = nsplitPixHits_sort
-                nBLHits_arr =  nBLHits_sort
-                nPixHits_arr = nPixHits_sort
-                nSCTHits_arr = nSCTHits_sort
-                nsharedBLHits_arr =  nsharedBLHits_sort
-                nsharedPixHits_arr = nsharedPixHits_sort
-                nsharedSCTHits_arr = nsharedSCTHits_sort
-                expectBLayerHit_arr =expectBLayerHit_sort
-
             else:
                 sd0_arr = np.hstack( (sd0_arr, sd0_sort) )
                 sz0_arr = np.hstack( (sz0_arr, sz0_sort) )
@@ -184,19 +134,6 @@ for fname in ROOTfileNames:
                 eta_arr = np.hstack( (eta_arr, eta_sort) )
                 theta_arr = np.hstack( (theta_arr, theta_sort) )
                 phi_arr = np.hstack( (phi_arr, phi_sort) )
-
-                nInnHits_arr =  np.hstack( (nInnHits_arr, nInnHits_sort) )
-                nNextToInnHits_arr = np.hstack( (nNextToInnHits_arr, nNextToInnHits_sort) )
-                nsplitBLHits_arr =  np.hstack( (nsplitBLHits_arr, nsplitBLHits_sort) )
-                nsplitPixHits_arr = np.hstack( (nsplitPixHits_arr, nsplitPixHits_sort) )
-                nBLHits_arr =  np.hstack( (nBLHits_arr, nBLHits_sort) )
-                nPixHits_arr = np.hstack( (nPixHits_arr, nPixHits_sort) )
-                nSCTHits_arr = np.hstack( (nSCTHits_arr, nSCTHits_sort) )
-                nsharedBLHits_arr =  np.hstack( (nsharedBLHits_arr, nsharedBLHits_sort) )
-                nsharedPixHits_arr = np.hstack( (nsharedPixHits_arr, nsharedPixHits_sort) )
-                nsharedSCTHits_arr = np.hstack( (nsharedSCTHits_arr, nsharedSCTHits_sort) )
-                expectBLayerHit_arr =np.hstack( (expectBLayerHit_arr, expectBLayerHit_sort) )
-
 
 
         ####################################################################################
@@ -244,9 +181,9 @@ for fname in ROOTfileNames:
 
         label_arr = np.dstack( (jet_flav, jet_pt, jet_eta, jet_llr, jet_ip3d_pb, jet_ip3d_pc, jet_ip3d_pu, jet_ip3d_ntrk, jet_mv2c20, jet_sv1_llr, jet_mv2c10, jet_JVT, jet_aliveafterOR) )[0]
 
-        trk_arr = np.dstack( (sd0_arr, sz0_arr, pTFrac_arr, dR_arr, grade_arr, llr_arr, pt_arr, nInnHits_arr, nNextToInnHits_arr,
-                              nsplitBLHits_arr, nsplitPixHits_arr, nBLHits_arr, nPixHits_arr, nSCTHits_arr, nsharedBLHits_arr, 
-                              nsharedPixHits_arr, nsharedSCTHits_arr, expectBLayerHit_arr) )[0] 
+        #trk_arr = np.dstack( (sd0_arr, sz0_arr, pTFrac_arr, dphi_arr, deta_arr, grade_arr, llr_arr, pt_arr) )[0] 
+        #trk_arr = np.dstack( (sd0_arr, sz0_arr, pTFrac_arr, d0_arr, z0_arr, grade_arr, llr_arr, pt_arr) )[0] 
+        trk_arr = np.dstack( (sd0_arr, sz0_arr, pTFrac_arr, dR_arr, grade_arr, llr_arr, pt_arr) )[0] 
 
         ###########################
         ## extract sv1 vertex info
@@ -263,7 +200,6 @@ for fname in ROOTfileNames:
         jet_sv1_L3d = np.zeros(sum(jet_njets))
         jet_sv1_dR = np.zeros(sum(jet_njets))
         jet_sv1_Lxy = np.zeros(sum(jet_njets))
-        jet_sv1_HasVTX = np.zeros(sum(jet_njets))
 
         v_jet = TLorentzVector()
         pv2sv = TVector3()
@@ -284,29 +220,33 @@ for fname in ROOTfileNames:
                     jet_sv1_L3d[ijet+njet] = sqrt(dx**2+ dy**2 + dz**2)
                     jet_sv1_Lxy[ijet+njet] = sqrt(dx**2+ dy**2)
                     jet_sv1_dR [ijet+njet] = pv2sv.DeltaR(jetAxis)
-                    jet_sv1_HasVTX[ijet+njet] = 1
                     
                 else:
-                    jet_sv1_L3d[ijet+njet] = 0
-                    jet_sv1_Lxy[ijet+njet] = 0
-                    jet_sv1_dR[ijet+njet] = 0
-                    jet_sv1_HasVTX[ijet+njet] = 0
+                    jet_sv1_L3d[ijet+njet] = -100
+                    jet_sv1_Lxy[ijet+njet] = -100
+                    jet_sv1_dR[ijet+njet] = -1
                     
             njet += jet_njets[ievt]
 
-        sv1_arr = np.dstack( (  jet_sv1_ntrkv, jet_sv1_n2t, jet_sv1_m, jet_sv1_efc, jet_sv1_sig3d, jet_sv1_normdist, jet_sv1_L3d, jet_sv1_Lxy, jet_sv1_dR, jet_sv1_HasVTX ) )[0]            
+        print "jet_sv1_l3d", jet_sv1_L3d
+        print "jet_sv1_lxy", jet_sv1_Lxy
+        print "jet_sv1_dR", jet_sv1_dR
+
+        sv1_arr = np.dstack( (  jet_sv1_ntrkv, jet_sv1_n2t, jet_sv1_m, jet_sv1_efc, jet_sv1_sig3d, jet_sv1_normdist, jet_sv1_L3d, jet_sv1_Lxy, jet_sv1_dR  ) )[0]            
 
         if firstFile:
             out_trk_arr = trk_arr
             out_label_arr = label_arr
             out_sv1_arr = sv1_arr
+                
             firstFile= False
-
         else:
             out_trk_arr = np.vstack( (out_trk_arr, trk_arr) )
             out_label_arr = np.vstack( (out_label_arr, label_arr) ) 
             out_sv1_arr = np.vstack( (out_sv1_arr, sv1_arr) ) 
 
+#        print 'track pt', pTFrac_arr
+#        print 'track sd0', sd0_arr 
 #        print 'jet pt', jet_pt
 #        print 'jet JVT', jet_JVT
 #        print sv1_arr

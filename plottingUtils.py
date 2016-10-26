@@ -4,7 +4,7 @@ import cPickle
 import json
 import numpy as np
 
-colorlist = [2, 4, 8, 28, 51, 93, 30, 38, 41, 42, 46]
+colorlist = [2, 4, 8, 28, 93, 30, 38, 41, 42, 46, 47, 48, 49, 51, 52, 53, 54, 55, 56, 57, 58, 59]
 
 # signal should be in format [ array1, array2, array3 ], where each array represents one approach
 # Each array should be an array of scores per data, aligned with other arrays
@@ -16,6 +16,20 @@ def getROC( signal, background, label, cut_start=None, cut_end=None, outputName=
 
 		#c_start=(0.0 if cut_start==None else cut_start)
 		#c_end=  (1.0 if cut_end==None else cut_end)
+		
+		print s_sort, b_sort
+
+		for i in range(s_sort.shape[0]):
+			if s_sort[i] == float("Inf"):
+				s_sort[i] = 100000
+			if s_sort[i] == float("-Inf"):
+				s_sort[i] = -1000000
+
+		for i in range(b_sort.shape[0]):
+			if b_sort[i] == float("Inf"):
+				b_sort[i] = 100000
+			if b_sort[i] == float("-Inf"):
+				b_sort[i] = -1000000
 
 		c_start=np.min( (s_sort[0], b_sort[0]) )
 		c_end=  np.max( (s_sort[len(s_sort)-1], b_sort[len(b_sort)-1]) )
@@ -43,7 +57,7 @@ def getROC( signal, background, label, cut_start=None, cut_end=None, outputName=
 
 		ROCList.append(ROC)
 
-	f = ROOT.TFile(outputName, "RECREATE")
+	f = ROOT.TFile(outputName, "update")
 
 	canvas = ROOT.TCanvas("ROC_Overlay", "ROC_Overlay", 800, 600)
 	canvas.cd()
@@ -87,11 +101,13 @@ def getROC( signal, background, label, cut_start=None, cut_end=None, outputName=
 # support multiple curve comparison
 # histories = [ array1, array2, ... ]
 def getTrainingCurve( histories,  labels, outputName="myTrainingCurve.root"):
-	f = ROOT.TFile(outputName, "RECREATE")
+	f = ROOT.TFile(outputName, "update")
 	legend = ROOT.TLegend(0.5, 0.5, 0.75, 0.75)
 	mg = ROOT.TMultiGraph()
 
 	TrainCurveList = []
+	localcolor = colorlist
+
 	for i in range(len(histories)):
 		history = histories[i]
 
@@ -103,8 +119,8 @@ def getTrainingCurve( histories,  labels, outputName="myTrainingCurve.root"):
 
 		trainingCurve.SetName("TrainCurve_"+labels[i])
 		trainingCurve.SetLineWidth(2)
-		trainingCurve.SetLineColor(colorlist[i])
-		trainingCurve.SetMarkerColor(colorlist[i])
+		trainingCurve.SetLineColor(localcolor[i])
+		trainingCurve.SetMarkerColor(localcolor[i])
 
 		mg.Add(trainingCurve)
 		legend.AddEntry(trainingCurve, labels[i], "lp")
@@ -123,6 +139,7 @@ def getTrainingCurve( histories,  labels, outputName="myTrainingCurve.root"):
 	f.Close()
 
 	return (TrainCurveList, canvas)
+
 
 def compareOptimizater():
 	model_list = [
@@ -153,6 +170,7 @@ def compareOptimizater():
 
 	print "Plotting Training Curves ... "
 	getTrainingCurve(history_list, labels, "TrainCurveOptimizer.root")
+
 
 def compareRNN():
 	model_list = [
@@ -318,7 +336,7 @@ def getCutValue(disc, eff_target):
 # each item in approachList should be (scoreList, varList, label) for each approach
 def MultipleEffCurve(outputName, approachList, bins, scoreCut = None, eff_target = 0.7):
 
-	fout = ROOT.TFile(outputName, "RECREATE")
+	fout = ROOT.TFile(outputName, "update")
 
 	for scoreList, varList, label in approachList:
 		heff = getEffCurve(scoreList, varList, label, bins, scoreCut, eff_target)
@@ -330,7 +348,7 @@ def MultipleEffCurve(outputName, approachList, bins, scoreCut = None, eff_target
 # each item in approachList should be (scoreList, varList, LightscoreList, LightvarList, label) for each approach
 def MultipleRejCurve(outputName, approachList, bins, scoreCut = None, eff_target = 0.7):
 
-	fout = ROOT.TFile(outputName, "RECREATE")
+	fout = ROOT.TFile(outputName, "update")
 
 	for scoreList, varList, LightscoreList, LightvarList, label in approachList:
 		heff = getLRejCurveFixedEff(scoreList, varList, LightscoreList, LightvarList, label, bins, scoreCut, eff_target)
@@ -338,17 +356,66 @@ def MultipleRejCurve(outputName, approachList, bins, scoreCut = None, eff_target
 
 	fout.Close()
 
+def ConvertEffToGraph(effplot, bins, doEff=True):
+    print effplot
+    eff = []
+    efferror = []
+    for i in range(len(bins)):
+        if doEff:
+            eff.append(effplot.GetEfficiency(i+1))
+            efferror.append(effplot.GetEfficiencyErrorLow(i+1))
+
+        else:
+		try :
+			eff.append(1./effplot.GetEfficiency(i+1))
+			efferror.append( (effplot.GetEfficiencyErrorLow(i+1)/effplot.GetEfficiency(i+1))/effplot.GetEfficiency(i+1) )
+		except ZeroDivisionError:
+			eff.append(0)
+			efferror.append( 0)
+			
+    newgraph = ROOT.TGraphErrors (len(bins), array.array('d', bins), array.array('d', eff), array.array('d', [0]*len(bins)), array.array('d', efferror))
+    return newgraph
+
+
 # here approachList also includes scoreCutList, which should be consistent with bins                  
 def MultipleFlatEffCurve(outputName, approachList, bins):
-        fout = ROOT.TFile(outputName, "RECREATE")
 
+        fout = ROOT.TFile(outputName, "update")
+	fout.cd()
+	Canv = ROOT.TCanvas("EffComb", "EffComb", 0, 800, 0, 800)
+	Canv.cd()
+
+	EffCurves = []
         for scoreList, varList, label, scoreCutList in approachList:
                 heff = getFixEffCurve(scoreList, varList, label, bins, fix_eff_target=0., scoreCutList=scoreCutList, onlyReturnCutList=False)
-                fout.WriteTObject(heff, heff.GetName(), "Overwrite")
+		EffCurves.append(heff)
 
-        fout.Close()
+	legend = ROOT.TLegend(0.5, 0.5, 0.75, 0.75)
+	legend_rel = ROOT.TLegend(0.5, 0.5, 0.75, 0.75)
+	ROCs = []
+	mg = ROOT.TMultiGraph()
 
+	for i in range(len(EffCurves)):
 
+		ROC = ConvertEffToGraph(EffCurves[i],bins, False)
+		ROC.SetLineWidth(2)
+		ROC.SetLineColor(colorlist[i])
+		ROC.SetMarkerColor(colorlist[i])
+		ROC.SetMarkerStyle(1)
+    
+		mg.Add(ROC)
+		
+		legend.AddEntry(ROC, approachList[i][2][1], "lp")
+
+		ROCs.append(ROC)
+
+	mg.Draw("AL*")
+	mg.GetXaxis().SetTitle("b-jet p_{T} [GeV]")
+	mg.GetYaxis().SetTitle("l-jet Rejection")
+	legend.Draw("same")
+	Canv.Write()
+
+	fout.Close()
 ####################################################################################################
 
 
