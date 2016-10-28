@@ -76,12 +76,19 @@ class Models:
 		self.label = label
 
 
-def LoadModel(filebase, testvec, label, loss = "binary_crossentropy"):
-	model = model_from_json(open( filebase+'_architecture.json').read())
-	model.load_weights(filebase + '_model_weights.h5')
-	model.compile(loss =loss , optimizer= 'adam', metrics=["accuracy"])
-
-	pred = model.predict( testvec, batch_size)
+def LoadModel(filebase, testvec, label, loss = "binary_crossentropy", simpleBuild=False ):
+    if simpleBuild:
+        model = model_from_json(open( filebase+'_architecture.json').read())
+        model.load_weights(filebase + '_model_weights.h5')
+    else:
+        #NOTE only for models coming from build_1hidden
+        n_cont_vars = testvec[0].shape[2]
+        model = _buildModel_1hidden(n_cont_vars)
+        model.load_weights(filebase + '_model_weights.h5', by_name=True)
+        
+    model.compile(loss =loss , optimizer= 'adam', metrics=["accuracy"])
+    
+    pred = model.predict( testvec, batch_size)
 
 	if "4n" in filebase:
 		pred = np.log(pred[:,0]/(0.9*pred[:,2] + 0.1*pred[:,1]))
@@ -96,35 +103,37 @@ def LoadModel(filebase, testvec, label, loss = "binary_crossentropy"):
 
 
 def makeData( Variables = "IP3D", max_len=max_len, padding= o.padding, nLSTMClass = o.nLSTMClass, TrackOrder = o.TrackOrder): 
-	print "Getting Data ..."
+    print "Getting Data ..."
 
+    folder_name = '/u/at/zihaoj/nfs/RNN/MakeData/'
+        
 	f = None
 	if TrackOrder == "Sd0" and Variables == "phi":
-		f = file('MakeData/Dataset_V47_IP3D_pTFrac_dphi_deta_5m.pkl','r')
+		f = file(folder_name+'Dataset_V47_IP3D_pTFrac_dphi_deta_5m.pkl','r')
 	if TrackOrder == "Sd0" and Variables == "dtheta":
-		f = file('MakeData/Dataset_V47_IP3D_pTFrac_dphi_dtheta_5m.pkl','r')
+		f = file(folder_name+'Dataset_V47_IP3D_pTFrac_dphi_dtheta_5m.pkl','r')
 	if TrackOrder == "Sd0" and Variables == "d0z0":
-		f = file('MakeData/Dataset_V47_IP3D_pTFrac_d0_z0_5m.pkl','r')
+		f = file(folder_name+'Dataset_V47_IP3D_pTFrac_d0_z0_5m.pkl','r')
 
 	if TrackOrder == "Sd0" and Variables == "dR":
-		f = file('MakeData/Dataset_V47_IP3D_pTFrac_dR_5m.pkl','r')
-		#f =  file('MakeData/Dataset_V47_IP3D_pTFrac_dR_SV1_test.pkl','r')
+		f = file(folder_name+'Dataset_V47_IP3D_pTFrac_dR_5m.pkl','r')
+		#f =  file(folder_name+'Dataset_V47_IP3D_pTFrac_dR_SV1_test.pkl','r')
 
 	if TrackOrder == "Sd0" and Variables == "Hits":
-		#f = file('MakeData/Dataset_V47_IP3D_pTFrac_dR_hits_5m.pkl','r')
-		f = file('MakeData/Dataset_V47_IP3D_pTFrac_dR_hits_50k.pkl','r')
+		#f = file(folder_name+'Dataset_V47_IP3D_pTFrac_dR_hits_5m.pkl','r')
+		f = file(folder_name+'Dataset_V47_IP3D_pTFrac_dR_hits_50k.pkl','r')
 
 	if TrackOrder == "Reverse" and Variables == "dR":
-		f = file('MakeData/Dataset_V47_IP3D_pTFrac_dR_reverse_sd0order_5m.pkl','r')
+		f = file(folder_name+'Dataset_V47_IP3D_pTFrac_dR_reverse_sd0order_5m.pkl','r')
 
 	if TrackOrder == "Sd0" and Variables == "IP3D":
-		f = file('MakeData/Dataset_V47_IP3D_pTFrac_dR_5m.pkl','r')
+		f = file(folder_name+'Dataset_V47_IP3D_pTFrac_dR_5m.pkl','r')
 
 	if TrackOrder == "SL0":
-		f = file('MakeData/Dataset_V47_IP3D_pTFrac_dR_sl0order_5m.pkl','r')
+		f = file(folder_name+'Dataset_V47_IP3D_pTFrac_dR_sl0order_5m.pkl','r')
 
 	if TrackOrder == "pT":
-		f = file('MakeData/Dataset_IP3D_pTFrac_dR_5m_CMix_pTSort.pkl','r')
+		f = file(folder_name+'Dataset_IP3D_pTFrac_dR_5m_CMix_pTSort.pkl','r')
 
 
         trk_arr_all = cPickle.load(f)
@@ -325,6 +334,87 @@ def makeData( Variables = "IP3D", max_len=max_len, padding= o.padding, nLSTMClas
 	return dataset
 
 
+
+def _buildModel_1hidden(n_cont_vars):
+        
+    _m = Masking( mask_value=0, input_shape = (max_len, n_cont_vars))
+	left = Sequential()
+	left.add(_m)
+	#left.add( Activation('linear', input_shape=(max_len, n_cont_vars)) )
+	#left.add( Masking( mask_value=0, input_shape = (max_len, n_cont_vars) ))
+	#left.add( TimeDistributedPassThrough( input_shape=(max_len, n_cont_vars) ) )
+
+	_e = Embedding(max_embed_features, embed_size, mask_zero=True, input_length=max_len, name="embedding_1")
+	right = Sequential()
+	right.add(_e)
+	#right.add(Embedding(max_embed_features, embed_size, mask_zero=True, input_length=max_len))
+	#right.add(Embedding(max_embed_features, embed_size, mask_zero=False, input_length=max_len))
+
+
+	model = Sequential()
+	
+	if o.Variables != "Hits":
+		#model.add( Merge([left, right],mode='concat') )
+		model.add( Merge([_m, _e],mode='concat') )
+		#model.add(Lambda(MaskingHack, output_shape = MaskingHack_output_shape))
+	else:
+		model.add( left )
+		#model.add(Lambda(MaskingHack, output_shape = MaskingHack_output_shape))
+		
+	#model.add( Masking( mask_value=0.) )
+
+
+	if "LSTM" in o.Model:
+
+		lstm_layer = LSTM( int(o.nLSTMNodes), return_sequences=False, name="lstm_1")
+		lstm_layer_return_sequence = LSTM( int(o.nLSTMNodes), return_sequences=True, name="lstm_2")
+
+		if o.nLayers == "1":
+			model.add(lstm_layer)
+			model.add(Dropout(0.2))
+
+		if o.nLayers == "2":
+			model.add(lstm_layer_return_sequence)
+			model.add(Dropout(0.2))
+			model.add(lstm_layer)
+			model.add(Dropout(0.2))
+
+		if "MoreDense" in o.Model:
+			model.add(Dense(25,name="dense_2"))
+			model.add(Activation('relu'))
+			model.add(Dropout(0.2))
+
+	if "GRU" in o.Model:
+
+		gru_layer = GRU( int(o.nLSTMNodes), return_sequences=False,name="gru_1")
+		gru_layer_return_sequence = GRU( int(o.nLSTMNodes), return_sequences=True,name="gru_2")
+
+		if o.nLayers == "1":
+			model.add(gru_layer)
+			model.add(Dropout(0.2))
+
+		if o.nLayers == "2":
+			model.add(gru_layer_return_sequence)
+			model.add(Dropout(0.2))
+			model.add(gru_layer)
+			model.add(Dropout(0.2))
+
+		if "MoreDense" in o.Model:
+			model.add(Dense(25,name="dense_2"))
+			model.add(Activation('relu'))
+			model.add(Dropout(0.2))
+
+	if int(o.nLSTMClass) ==2:
+		model.add(Dense(1,name="dense_1"))
+		model.add(Activation('sigmoid'))
+
+	if int(o.nLSTMClass) ==4:
+		model.add(Dense(4,name="dense_1"))
+		model.add(Activation('softmax'))
+
+    return model
+
+
 def buildModel_1hidden(dataset, useAdam=False):
 
 	print "Building Model ..."
@@ -353,80 +443,7 @@ def buildModel_1hidden(dataset, useAdam=False):
 	##################
 	print "shape ", X_train_vec[0].shape,  X_train_vec[1].shape
 
-	_m = Masking( mask_value=0, input_shape = (max_len, n_cont_vars))
-	left = Sequential()
-	left.add(_m)
-	#left.add( Activation('linear', input_shape=(max_len, n_cont_vars)) )
-	#left.add( Masking( mask_value=0, input_shape = (max_len, n_cont_vars) ))
-	#left.add( TimeDistributedPassThrough( input_shape=(max_len, n_cont_vars) ) )
-
-	_e = Embedding(max_embed_features, embed_size, mask_zero=True, input_length=max_len)
-	right = Sequential()
-	right.add(_e)
-	#right.add(Embedding(max_embed_features, embed_size, mask_zero=True, input_length=max_len))
-	#right.add(Embedding(max_embed_features, embed_size, mask_zero=False, input_length=max_len))
-
-
-	model = Sequential()
-	
-	if o.Variables != "Hits":
-		#model.add( Merge([left, right],mode='concat') )
-		model.add( Merge([_m, _e],mode='concat') )
-		#model.add(Lambda(MaskingHack, output_shape = MaskingHack_output_shape))
-	else:
-		model.add( left )
-		#model.add(Lambda(MaskingHack, output_shape = MaskingHack_output_shape))
-		
-	#model.add( Masking( mask_value=0.) )
-
-
-	if "LSTM" in o.Model:
-
-		lstm_layer = LSTM( int(o.nLSTMNodes), return_sequences=False)
-		lstm_layer_return_sequence = LSTM( int(o.nLSTMNodes), return_sequences=True)
-
-		if o.nLayers == "1":
-			model.add(lstm_layer)
-			model.add(Dropout(0.2))
-
-		if o.nLayers == "2":
-			model.add(lstm_layer_return_sequence)
-			model.add(Dropout(0.2))
-			model.add(lstm_layer)
-			model.add(Dropout(0.2))
-
-		if "MoreDense" in o.Model:
-			model.add(Dense(25))
-			model.add(Activation('relu'))
-			model.add(Dropout(0.2))
-
-	if "GRU" in o.Model:
-
-		gru_layer = GRU( int(o.nLSTMNodes), return_sequences=False)
-		gru_layer_return_sequence = GRU( int(o.nLSTMNodes), return_sequences=True)
-
-		if o.nLayers == "1":
-			model.add(gru_layer)
-			model.add(Dropout(0.2))
-
-		if o.nLayers == "2":
-			model.add(gru_layer_return_sequence)
-			model.add(Dropout(0.2))
-			model.add(gru_layer)
-			model.add(Dropout(0.2))
-
-		if "MoreDense" in o.Model:
-			model.add(Dense(25))
-			model.add(Activation('relu'))
-			model.add(Dropout(0.2))
-
-	if int(o.nLSTMClass) ==2:
-		model.add(Dense(1))
-		model.add(Activation('sigmoid'))
-
-	if int(o.nLSTMClass) ==4:
-		model.add(Dense(4))
-		model.add(Activation('softmax'))
+    model = _buildModel_1hidden( n_cont_vars = n_cont_vars )
 
 	# try using different optimizers and different optimizer configs
 	print "Compiling ..."
