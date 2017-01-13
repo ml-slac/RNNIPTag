@@ -241,6 +241,8 @@ def getEffCurve(scoreList, varList, label, bins, scoreCut = None, eff_target = 0
 	if scoreCut is None:
 		scoreCut = getCutValue(scoreList, eff_target)
 
+	print "score Cut", scoreCut
+
 	# now loop over data points
 	for isampe in range(scoreList.shape[0]):
 		score = scoreList[isampe]
@@ -330,13 +332,12 @@ def getLRejCurveFixedEff(scoreList, varList, LightscoreList, LightvarList, label
 	return heff
 
 def getCutValue(disc, eff_target):
-	print 'disc', disc
 	return np.sort(disc)[ int((1.0-eff_target)*len(disc)) ]
 
 # each item in approachList should be (scoreList, varList, label) for each approach
 def MultipleEffCurve(outputName, approachList, bins, scoreCut = None, eff_target = 0.7):
 
-	fout = ROOT.TFile(outputName, "update")
+	fout = ROOT.TFile(outputName, "recreate")
 
 	for scoreList, varList, label in approachList:
 		heff = getEffCurve(scoreList, varList, label, bins, scoreCut, eff_target)

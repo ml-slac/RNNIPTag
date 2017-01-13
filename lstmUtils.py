@@ -52,7 +52,7 @@ p.add_option('--nLayers', type = "string", default = '1', dest="nLayers", help="
 p.add_option('--Filebase', type = "string", default = 'None', dest="filebase", help="filebase of trained model")
 p.add_option('--EmbedSize', type = "string", default = '2', dest="EmbedSize", help="embedding size")
 p.add_option('--doJetpTReweight', type = "string", default = 'n', dest="doJetpTReweight", help="reweight jet pT")
-
+p.add_option('--Version', type = "string", default = 'V51', dest="Version", help="version of input file")
 
 (o,a) = p.parse_args()
 
@@ -76,24 +76,28 @@ class Models:
 		self.label = label
 
 
-def LoadModel(filebase, testvec, label, loss = "binary_crossentropy", simpleBuild=False ):
-    if simpleBuild:
-        model = model_from_json(open( filebase+'_architecture.json').read())
-        model.load_weights(filebase + '_model_weights.h5')
-    else:
+def LoadModel(filebase, testvec, label, simpleBuild=False ,loss = "binary_crossentropy"):
+	if simpleBuild:
+		model = model_from_json(open( filebase+'_architecture.json').read())
+		model.load_weights(filebase + '_model_weights.h5')
+	else:
         #NOTE only for models coming from build_1hidden
-        n_cont_vars = testvec[0].shape[2]
-        model = _buildModel_1hidden(n_cont_vars)
-        model.load_weights(filebase + '_model_weights.h5', by_name=True)
+		#print "testvec shape", testvec.shape
+		n_cont_vars = 0
+		if "dR" in filebase:
+			n_cont_vars = testvec[0].shape[2]
+		if "hits" in filebase:
+			n_cont_vars = testvec.shape[1]
+		model = _buildModel_1hidden(n_cont_vars)
+		model.load_weights(filebase + '_model_weights.h5', by_name=True)
         
-    model.compile(loss =loss , optimizer= 'adam', metrics=["accuracy"])
+	model.compile(loss =loss , optimizer= 'adam', metrics=["accuracy"])
     
-    pred = model.predict( testvec, batch_size)
+	pred = model.predict( testvec, batch_size)
 
 	if "4n" in filebase:
 		pred = np.log(pred[:,0]/(0.9*pred[:,2] + 0.1*pred[:,1]))
-		#pred = np.log( (pred[:,0]+1)/ (pred[:,2]+1))
-
+	    
 	f = open(filebase+"_history.json", "r")
 	history = cPickle.load(f)
 	train_hist = history["loss"]
@@ -103,42 +107,41 @@ def LoadModel(filebase, testvec, label, loss = "binary_crossentropy", simpleBuil
 
 
 def makeData( Variables = "IP3D", max_len=max_len, padding= o.padding, nLSTMClass = o.nLSTMClass, TrackOrder = o.TrackOrder): 
-    print "Getting Data ..."
+	print "Getting Data ..."
 
-    folder_name = '/u/at/zihaoj/nfs/RNN/MakeData/'
+	folder_name = '/u/at/zihaoj/nfs2/RNNIPTag/MakeData/'
         
 	f = None
 	if TrackOrder == "Sd0" and Variables == "phi":
-		f = file(folder_name+'Dataset_V47_IP3D_pTFrac_dphi_deta_5m.pkl','r')
+		f = file(folder_name+'Dataset_'+o.Version+'_IP3D_pTFrac_dphi_deta_5m.pkl','r')
 	if TrackOrder == "Sd0" and Variables == "dtheta":
-		f = file(folder_name+'Dataset_V47_IP3D_pTFrac_dphi_dtheta_5m.pkl','r')
+		f = file(folder_name+'Dataset_'+o.Version+'_IP3D_pTFrac_dphi_dtheta_5m.pkl','r')
 	if TrackOrder == "Sd0" and Variables == "d0z0":
-		f = file(folder_name+'Dataset_V47_IP3D_pTFrac_d0_z0_5m.pkl','r')
+		f = file(folder_name+'Dataset_'+o.Version+'_IP3D_pTFrac_d0_z0_5m.pkl','r')
 
 	if TrackOrder == "Sd0" and Variables == "dR":
-		f = file(folder_name+'Dataset_V47_IP3D_pTFrac_dR_5m.pkl','r')
-		#f =  file(folder_name+'Dataset_V47_IP3D_pTFrac_dR_SV1_test.pkl','r')
+		#f = file(folder_name+'Dataset_'+o.Version+'_IP3D_pTFrac_dR_5m.pkl','r')
+		f = file(folder_name+'Dataset_'+o.Version+'_IP3D_pTFrac_dR_hits_3m.pkl', 'r')
 
 	if TrackOrder == "Sd0" and Variables == "Hits":
-		#f = file(folder_name+'Dataset_V47_IP3D_pTFrac_dR_hits_5m.pkl','r')
-		f = file(folder_name+'Dataset_V47_IP3D_pTFrac_dR_hits_50k.pkl','r')
+		f = file(folder_name+'Dataset_'+o.Version+'_IP3D_pTFrac_dR_hits_3m.pkl','r')
 
 	if TrackOrder == "Reverse" and Variables == "dR":
-		f = file(folder_name+'Dataset_V47_IP3D_pTFrac_dR_reverse_sd0order_5m.pkl','r')
+		f = file(folder_name+'Dataset_'+o.Version+'_IP3D_pTFrac_dR_reverse_sd0order_5m.pkl','r')
 
 	if TrackOrder == "Sd0" and Variables == "IP3D":
-		f = file(folder_name+'Dataset_V47_IP3D_pTFrac_dR_5m.pkl','r')
+		f = file(folder_name+'Dataset_'+o.Version+'_IP3D_pTFrac_dR_5m.pkl','r')
 
 	if TrackOrder == "SL0":
-		f = file(folder_name+'Dataset_V47_IP3D_pTFrac_dR_sl0order_5m.pkl','r')
+		f = file(folder_name+'Dataset_'+o.Version+'_IP3D_pTFrac_dR_sl0order_hits_3m.pkl','r')
 
 	if TrackOrder == "pT":
-		f = file(folder_name+'Dataset_IP3D_pTFrac_dR_5m_CMix_pTSort.pkl','r')
+		f = file(folder_name+'Dataset_'+o.Version+'_IP3D_pTFrac_dR_pt_hits_3m.pkl','r')
 
 
         trk_arr_all = cPickle.load(f)
 	labels_all = cPickle.load(f)
-        sv1_all = cPickle.load(f)
+        #sv1_all = cPickle.load(f)
 
 	f.close()
 
@@ -186,7 +189,7 @@ def makeData( Variables = "IP3D", max_len=max_len, padding= o.padding, nLSTMClas
 	X = X_all[:n_events]
 	labels = labels_all[:n_events]
 	y = (labels[:,0] ==5)
-	sv1 = sv1_all[:n_events]
+	#sv1 = sv1_all[:n_events]
 
 	if int(nLSTMClass) == 4 and ("LSTM" in o.Model or "GRU" in o.Model or "RNNSV1"==o.Model):
 		y = np.ndarray(shape =(labels.shape[0],4), dtype=float)
@@ -225,23 +228,23 @@ def makeData( Variables = "IP3D", max_len=max_len, padding= o.padding, nLSTMClas
 	X = X[ JetCuts]
 	y = y[ JetCuts]
 	labels = labels[JetCuts] 
-	sv1 = sv1[JetCuts]
+	#sv1 = sv1[JetCuts]
 
 	if o.doLessC == "y":
 		X_firsthalf = X[0:int(n_events/2.0)]
 		y_firsthalf = y[0:int(n_events/2.0)]
 		labels_firsthalf  = labels[0:int(n_events/2.0)]
-		sv1_firsthalf     = sv1[0:int(n_events/2.0)]
+		#sv1_firsthalf     = sv1[0:int(n_events/2.0)]
 
 		X_second = X[int(n_events/2.0):n_events]
 		y_second = y[int(n_events/2.0):n_events]
 		labels_second  = labels[int(n_events/2.0):n_events]
-		sv1_second     = sv1[int(n_events/2.0):n_events]
+		#sv1_second     = sv1[int(n_events/2.0):n_events]
 
 		X_second = X_second[labels_second[:,0]!=4]
 		y_second = y_second[labels_second[:,0]!=4]
 		labels_second  = labels_second[labels_second[:,0]!=4]
-		sv1_second     = sv1_second[labels_second[:,0]!=4]
+		#sv1_second     = sv1_second[labels_second[:,0]!=4]
 
 		X = np.vstack((X_firsthalf, X_second))
 
@@ -250,31 +253,36 @@ def makeData( Variables = "IP3D", max_len=max_len, padding= o.padding, nLSTMClas
 			y = np.vstack((y_firsthalf, y_second))
 		else :
 			y = (labels[:,0]==5)
-		sv1 = np.vstack((sv1_firsthalf, sv1_second))
+		#sv1 = np.vstack((sv1_firsthalf, sv1_second))
 
 
 	weights = np.ones( X.shape[0])
 	if o.doJetpTReweight == "y":
-
+		
 		upbound = 700
 		step =10
-
+		if o.Version =="V56" or o.Version == "V52":
+			upbound = 2000
+			step =50
+		
 		pt = labels[:,1]/1000.0
+		print "max pt", max(pt)
+
 		pt_b = pt[labels[:,0]==5]
 		pt_c = pt[labels[:,0]==4]
 		pt_l = pt[labels[:,0]==0]
 
-		hist_b = np.histogram(pt_b, 2000/step, (0,2000))[0]
+		hist_b = np.histogram(pt_b, 3000/step, (0,3000))[0]
 		hist_b = hist_b/float(np.sum(hist_b))
 		hist_b += 0.00000001
 
 
-		hist_c = np.histogram(pt_c, 2000/step, (0,2000))[0]
+		hist_c = np.histogram(pt_c, 3000/step, (0,3000))[0]
 		hist_c = hist_c/float(np.sum(hist_c))
 		hist_c += 0.00000001
 
 
-		hist_l = np.histogram(pt_l, 2000/step, (0,2000))[0]
+		hist_l = np.histogram(pt_l, 3000/step, (0,3000))[0]
 		hist_l = hist_l/float(np.sum(hist_l))
 		hist_l += 0.00000001
 
@@ -283,9 +291,9 @@ def makeData( Variables = "IP3D", max_len=max_len, padding= o.padding, nLSTMClas
 		weight_c = hist_l/hist_c
 
 		weight_b[upbound/10: weight_b.shape[0]-1] = 1
-		weight_c[upbound/10: weight_b.shape[0]-1] = 1
+		weight_c[upbound/10: weight_c.shape[0]-1] = 1
 
-		pt_bin = np.floor(pt/(10.))
+		pt_bin = np.floor(pt/(float(step)))
 		pt_bin.astype(int)
 
 		for ijet in range(weights.shape[0]):
@@ -304,7 +312,7 @@ def makeData( Variables = "IP3D", max_len=max_len, padding= o.padding, nLSTMClas
 		
 		
 	X_train, X_test = np.split( X, [ int(trainFraction*X.shape[0]) ] )
-	sv1_train, sv1_test = np.split ( sv1, [ int(trainFraction*sv1.shape[0]) ] )
+	#sv1_train, sv1_test = np.split ( sv1, [ int(trainFraction*sv1.shape[0]) ] )
 	y_train, y_test = np.split( y, [ int(trainFraction*y.shape[0]) ] )
 	labels_train, labels_test = np.split( labels, [ int(trainFraction*labels.shape[0]) ] )
 	weights_train, weights_test = np.split( weights, [ int(trainFraction*labels.shape[0]) ] )
@@ -319,8 +327,8 @@ def makeData( Variables = "IP3D", max_len=max_len, padding= o.padding, nLSTMClas
 	  "X": X,
 	  "X_train": X_train,
 	  "X_test": X_test,
-	  "sv1_train": sv1_train,
-	  "sv1_test": sv1_test,
+	  #"sv1_train": sv1_train,
+	  #"sv1_test": sv1_test,
 	  "labels": labels,
 	  "labels_train": labels_train,
 	  "labels_test": labels_test,
@@ -337,7 +345,7 @@ def makeData( Variables = "IP3D", max_len=max_len, padding= o.padding, nLSTMClas
 
 def _buildModel_1hidden(n_cont_vars):
         
-    _m = Masking( mask_value=0, input_shape = (max_len, n_cont_vars))
+	_m = Masking( mask_value=0, input_shape = (max_len, n_cont_vars))
 	left = Sequential()
 	left.add(_m)
 	#left.add( Activation('linear', input_shape=(max_len, n_cont_vars)) )
@@ -358,7 +366,7 @@ def _buildModel_1hidden(n_cont_vars):
 		model.add( Merge([_m, _e],mode='concat') )
 		#model.add(Lambda(MaskingHack, output_shape = MaskingHack_output_shape))
 	else:
-		model.add( left )
+		model.add( Masking( mask_value=0, input_shape = (max_len, n_cont_vars))  )
 		#model.add(Lambda(MaskingHack, output_shape = MaskingHack_output_shape))
 		
 	#model.add( Masking( mask_value=0.) )
@@ -411,8 +419,8 @@ def _buildModel_1hidden(n_cont_vars):
 	if int(o.nLSTMClass) ==4:
 		model.add(Dense(4,name="dense_1"))
 		model.add(Activation('softmax'))
-
-    return model
+		
+	return model
 
 
 def buildModel_1hidden(dataset, useAdam=False):
@@ -443,7 +451,7 @@ def buildModel_1hidden(dataset, useAdam=False):
 	##################
 	print "shape ", X_train_vec[0].shape,  X_train_vec[1].shape
 
-    model = _buildModel_1hidden( n_cont_vars = n_cont_vars )
+	model = _buildModel_1hidden( n_cont_vars = n_cont_vars )
 
 	# try using different optimizers and different optimizer configs
 	print "Compiling ..."
@@ -645,21 +653,19 @@ def buildModel_RNNPlus(dataset, useAdam=True):
 	llh = None
 
 	if int(o.nLSTMClass) ==2:
-		RNNmodel = model_from_json(open( 'V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_25nLSTMNodes_CMix_architecture.json').read())
-		RNNmodel.load_weights( 'V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_25nLSTMNodes_CMix_model_weights.h5' )
+		RNNmodel = model_from_json(open( 'V51_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_25nLSTMNodes_CMix_architecture.json').read())
+		RNNmodel.load_weights( 'V51_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_25nLSTMNodes_CMix_model_weights.h5' )
 		RNNmodel.compile(loss='binary_crossentropy', optimizer='adam', metrics=["accuracy"])
 
 		pred = RNNmodel.predict( X_train_vec_dR, batch_size)
 		X_concat = np.ndarray(shape=( pred[:,0].shape[0], 2))
 
 	if int(o.nLSTMClass) ==4:
-		RNNmodel = model_from_json(open( 'V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_25nLSTMNodes_CMix_architecture.json').read())
-		RNNmodel.load_weights( 'V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_25nLSTMNodes_CMix_model_weights.h5' )
+		RNNmodel = model_from_json(open( 'V51_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_25nLSTMNodes_CMix_architecture.json').read())
+		RNNmodel.load_weights( 'V51_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_25nLSTMNodes_CMix_model_weights.h5' )
 		RNNmodel.compile(loss='binary_crossentropy', optimizer='adam', metrics=["accuracy"])
 
 		pred = RNNmodel.predict( X_train_vec_dR, batch_size)
-
-		
 
 		llh   = np.log(pred[:,0]/pred[:,2]) 
 		#X_concat = np.ndarray(shape=( pred[:, 0].shape[0], 5))
@@ -716,8 +722,8 @@ def generateOutput():
 	y_test_dR = dataset_dR['y_test']
 	X_test_vec_dR     = [X_test_dR[:,:,0:4], X_test_dR[:,:,4]]
 
-	RNNmodel_dR = model_from_json(open( 'V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_25nLSTMNodes_CMix_architecture.json').read())
-	RNNmodel_dR.load_weights( 'V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_25nLSTMNodes_CMix_model_weights.h5' )
+	RNNmodel_dR = model_from_json(open( 'V51_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_25nLSTMNodes_CMix_architecture.json').read())
+	RNNmodel_dR.load_weights( 'V51_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_25nLSTMNodes_CMix_model_weights.h5' )
 	RNNmodel_dR.compile(loss='binary_crossentropy', optimizer='adam', metrics=["accuracy"])
 	RNNpred_dR = RNNmodel_dR.predict( X_test_vec_dR, batch_size)
 
@@ -754,10 +760,10 @@ def evalModel(dataset, model, modelname):
 	#################
 
 	X_test = dataset['X_test']
-	sv1_test = dataset['sv1_test']
+	#sv1_test = dataset['sv1_test']
 	y_test = dataset['y_test']
 	labels_test = dataset['labels_test']
-	sv1_test = dataset['sv1_test']
+	#sv1_test = dataset['sv1_test']
 
 	# split by "continuous variable" and "categorization variable"
 	X_test_vec  = [X_test[:,:,0:-1],   X_test[:,:, -1]]
@@ -775,16 +781,16 @@ def evalModel(dataset, model, modelname):
 		llh = None
 
 		if int(o.nLSTMClass) ==2:
-			RNNmodel = model_from_json(open( 'V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_25nLSTMNodes_CMix_architecture.json').read())
-			RNNmodel.load_weights( 'V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_25nLSTMNodes_CMix_model_weights.h5' )
+			RNNmodel = model_from_json(open( 'V51_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_25nLSTMNodes_CMix_architecture.json').read())
+			RNNmodel.load_weights( 'V51_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_25nLSTMNodes_CMix_model_weights.h5' )
 			RNNmodel.compile(loss='binary_crossentropy', optimizer='adam', metrics=["accuracy"])
 
 			pred = RNNmodel.predict( X_test_vec_dR, batch_size)
 			X_test_vec = np.ndarray(shape=( pred[:,0].shape[0], 2))
 
 		if int(o.nLSTMClass) ==4:
-			RNNmodel = model_from_json(open( 'V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_25nLSTMNodes_CMix_architecture.json').read())
-			RNNmodel.load_weights( 'V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_25nLSTMNodes_CMix_model_weights.h5' )
+			RNNmodel = model_from_json(open( 'V51_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_25nLSTMNodes_CMix_architecture.json').read())
+			RNNmodel.load_weights( 'V51_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_25nLSTMNodes_CMix_model_weights.h5' )
 			RNNmodel.compile(loss='binary_crossentropy', optimizer='adam', metrics=["accuracy"])
 
 			pred = RNNmodel.predict( X_test_vec_dR, batch_size)
@@ -811,8 +817,8 @@ def evalModel(dataset, model, modelname):
 #				#X_test_vec[i][j+1] = pred[i, j]
 #				X_test_vec[i][j+1] = llh[i, j]
 
-	if o.Model == "RNNSV1":
-		X_test_vec.append(sv1_test)
+	#if o.Model == "RNNSV1":
+		#X_test_vec.append(sv1_test)
 
 	score = model.evaluate(X_test_vec, y_test, batch_size=batch_size)
 	print('Test score:', score)
@@ -836,7 +842,7 @@ def BuildModel():
 	#global dataset_storage,model_storage,history_storage
 
 	dataset = makeData (Variables = o.Variables)
-	dataset_storage = dataset
+	#dataset_storage = dataset
 
 	model = None
 	history = None
@@ -854,7 +860,7 @@ def BuildModel():
 		model, history = buildModel_RNNPlus(dataset, useAdam=True)
 
 
-	modelname = "V47_" + o.Model + "_"+ o.Variables + "_" + o.nEpoch + "epoch_" + str( n_events/1000) + 'kEvts_' + str( o.nTrackCut) + 'nTrackCut_' +  o.nMaxTrack + "nMaxTrack_" + o.nLSTMClass +"nLSTMClass_" + o.nLSTMNodes +"nLSTMNodes_"+ o.nLayers + "nLayers"
+	modelname = o.Version +"_" + o.Model + "_"+ o.Variables + "_" + o.nEpoch + "epoch_" + str( n_events/1000) + 'kEvts_' + str( o.nTrackCut) + 'nTrackCut_' +  o.nMaxTrack + "nMaxTrack_" + o.nLSTMClass +"nLSTMClass_" + o.nLSTMNodes +"nLSTMNodes_"+ o.nLayers + "nLayers"
 
 	model = evalModel(dataset, model, o.Model)
 	
@@ -886,133 +892,54 @@ def BuildModel():
 def compareROC():
 
 	dataset_dR = makeData( Variables = "dR", padding = "pre" , nLSTMClass=2)
-	dataset_dR_reverse = makeData( Variables = "dR", padding = "pre" , nLSTMClass=2, TrackOrder = "Reverse")
-	dataset_dR_SL0 = makeData( Variables = "dR", padding = "pre" , nLSTMClass=2, TrackOrder = "SL0")
-	dataset_dR_20trk = makeData( Variables = "dR", max_len=20, padding = "pre" , nLSTMClass=2)
-	dataset_dR_5Embed = makeData( Variables = "dR", max_len=20, padding = "pre" , nLSTMClass=2)
 	dataset_Hits = makeData( Variables = "Hits", padding = "pre" , nLSTMClass=2)
-	
+
+	dataset_dR_SL0 = makeData( Variables = "dR", padding = "pre" , nLSTMClass=2, TrackOrder = "SL0")
+	dataset_dR_pT = makeData( Variables = "dR", padding = "pre" , nLSTMClass=2, TrackOrder = "pT")
+
 	############################
 	X_test_dR = dataset_dR['X_test']
-	sv1_test_dR = dataset_dR['sv1_test']
 	y_test_dR = dataset_dR['y_test']
 	X_test_vec_dR     = [X_test_dR[:,:,0:4], X_test_dR[:,:,4]]
-	X_test_vec_sv1_dR     = [X_test_dR[:,:,0:4], X_test_dR[:,:,4]]
-	X_test_vec_sv1_dR.append(sv1_test_dR)
-	X_test_vec_IP3D     = [X_test_dR[:,:,0:2], X_test_dR[:,:,4]]
 	
 	labels_test_dR = dataset_dR['labels_test']
 	ntrk_test = labels_test_dR[:,7]
 	pt_test = labels_test_dR[:,1]
-
-	X_test_dR_reverse = dataset_dR_reverse['X_test']
-	y_test_dR_reverse = dataset_dR_reverse['y_test']
-	X_test_vec_dR_reverse     = [X_test_dR_reverse[:,:,0:4], X_test_dR_reverse[:,:,4]]
-	labels_test_dR_reverse = dataset_dR_reverse['labels_test']
 
 	X_test_dR_SL0 = dataset_dR_SL0['X_test']
 	y_test_dR_SL0 = dataset_dR_SL0['y_test']
 	X_test_vec_dR_SL0     = [X_test_dR_SL0[:,:,0:4], X_test_dR_SL0[:,:,4]]
 	labels_test_dR_SL0 = dataset_dR_SL0['labels_test']
 
-	X_test_dR_20trk = dataset_dR_20trk['X_test']
-	y_test_dR_20trk = dataset_dR_20trk['y_test']
-	X_test_vec_dR_20trk     = [X_test_dR_20trk[:,:,0:4], X_test_dR_20trk[:,:,4]]
-	labels_test_dR_20trk = dataset_dR_20trk['labels_test']
+	X_test_dR_pT = dataset_dR_pT['X_test']
+	y_test_dR_pT = dataset_dR_pT['y_test']
+	X_test_vec_dR_pT     = [X_test_dR_pT[:,:,0:4], X_test_dR_pT[:,:,4]]
+	labels_test_dR_pT = dataset_dR_pT['labels_test']
+
 
 	X_test_vec_Hits = dataset_Hits['X_test']
 	y_test_Hits = dataset_Hits['y_test']
 	labels_test_Hits = dataset_Hits['labels_test']
+	pt_test_Hits = labels_test_Hits[:,1]
 
         ip3d_test = labels_test_dR[:,3]
 	SV1_test = labels_test_dR[:,9]
 	MV2_test = labels_test_dR[:,10]
 
-#	LoadModel("V47_GRU_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_25nLSTMNodes_1nLayers_CMix", X_test_vec_dR ,"GRU 25n 1L 40E 2Class")
-#	LoadModel("V47_GRU_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_50nLSTMNodes_1nLayers_CMix", X_test_vec_dR ,"GRU 50n 1L 40E 2Class")
-#	LoadModel("V47_GRU_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_60nLSTMNodes_1nLayers_CMix", X_test_vec_dR ,"GRU 60n 1L 40E 2Class")
-#	LoadModel("V47_GRU_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_25nLSTMNodes_1nLayers_CMix", X_test_vec_dR ,"GRU 25n 1L 40E 4Class")
-#	LoadModel("V47_GRU_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix", X_test_vec_dR ,"GRU 50n 1L 40E 4Class")
-#	LoadModel("V47_GRU_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_60nLSTMNodes_1nLayers_CMix", X_test_vec_dR ,"GRU 60n 1L 40E 4Class")
+	#LoadModel("V51_LSTM_Hits_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix", X_test_vec_Hits, "LSTM 60E 4Class Hit Variables")
+	#LoadModel("V51_LSTM_Hits_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix_JetpTReweight", X_test_vec_Hits, "LSTM 60E 4Class Hit Variables pTReweight")
+	
+	#LoadModel("V51_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix", X_test_vec_dR, "Rel21 ttbar LSTM 60E 4Class")
+	#LoadModel("V51_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix_JetpTReweight", X_test_vec_dR, "Rel21 ttbar LSTM 60E 4Class pTReweight")
 
-#	LoadModel("V47_LSTM_IP3D_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_50nLSTMNodes_1nLayers_CMix", X_test_vec_IP3D, "LSTM(w/o pTFrac and dR 50n 1L 40E 2Class")
-#	LoadModel("V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_25nLSTMNodes_1nLayers_CMix", X_test_vec_dR, "LSTM 25n 1L 40E 2Class")
-#	LoadModel("V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_50nLSTMNodes_1nLayers_CMix", X_test_vec_dR, "LSTM 50n 1L 40E 2Class")
-#	LoadModel("V47_LSTMMoreDense_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_25nLSTMNodes_1nLayers_CMix", X_test_vec_dR, "LSTM More Dense 25n 1L 40E 2Class")
-#	LoadModel("V47_LSTMMoreDense_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_50nLSTMNodes_1nLayers_CMix", X_test_vec_dR, "LSTM More Dense 50n 1L 40E 2Class")
-#	LoadModel("V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_25nLSTMNodes_1nLayers_ReverseOrder_CMix",  X_test_vec_dR_reverse, "LSTM 25n 1L 40E 2Class Reverse Order" )
-#	LoadModel("V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_25nLSTMNodes_2nLayers_CMix", X_test_vec_dR, "LSTM 25n 2L 40E 2Class")
-#	LoadModel("V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_50nLSTMNodes_2nLayers_CMix", X_test_vec_dR, "LSTM 50n 2L 40E 2Class")
-#	LoadModel("V47_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_50nLSTMNodes_2nLayers_CMix", X_test_vec_dR, "LSTM 50n 2L 60E 2Class")
-#	LoadModel("V47_LSTM_Hits_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_50nLSTMNodes_1nLayers_CMix", X_test_vec_Hits, "LSTM 50n 1L 40E 2Class Hits")
-#	LoadModel("V47_LSTM_Hits_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_75nLSTMNodes_1nLayers_CMix", X_test_vec_Hits, "LSTM 75n 1L 40E 2Class Hits")
-#	LoadModel("V47_LSTM_Hits_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_50nLSTMNodes_1nLayers_CMix", X_test_vec_Hits, "LSTM 50n 1L 60E 2Class Hits")
-#	LoadModel("V47_LSTM_Hits_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_75nLSTMNodes_1nLayers_CMix", X_test_vec_Hits, "LSTM 75n 1L 60E 2Class Hits")
-#	LoadModel("V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_25nLSTMNodes_2nLayers_CMix_Retrain_40", X_test_vec_dR, "LSTM 25n 2L 80E 2Class")
-#	LoadModel("V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_50nLSTMNodes_2nLayers_CMix_Retrain_40", X_test_vec_dR, "LSTM 50n 2L 80E 2Class")
-#	LoadModel("V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_50nLSTMNodes_1nLayers_SL0_CMix", X_test_vec_dR_SL0, "LSTM 50n 1L 40E 2Class sqrt(sd0^2+sz0^2) Order" )
-#	LoadModel("V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_25nLSTMNodes_1nLayers_CMix_JetpTReweight", X_test_vec_dR,  "LSTM 25n 1L 40E 2Class Jet pTReweight" )
-#	LoadModel("V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_50nLSTMNodes_1nLayers_CMix_JetpTReweight", X_test_vec_dR,  "LSTM 50n 1L 40E 2Class Jet pTReweight" )
-#	LoadModel("V47_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_25nLSTMNodes_1nLayers_CMix", X_test_vec_dR,  "LSTM 25n 1L 60E 2Class")
-#	LoadModel("V47_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_50nLSTMNodes_1nLayers_CMix", X_test_vec_dR,  "LSTM 50n 1L 60E 2Class")
-#	LoadModel("V47_LSTM_dR_60epoch_5000kEvts_0nTrackCut_20nMaxTrack_2nLSTMClass_50nLSTMNodes_1nLayers_CMix", X_test_vec_dR_20trk,  "LSTM 50n 1L 60E 2Class 20trk")
-#	LoadModel("V47_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_50nLSTMNodes_1nLayers_CMix_5EmbedSize", X_test_vec_dR,  "LSTM 50n 1L 60E 2Class 5Embed")
-#	LoadModel("V47_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_25nLSTMNodes_1nLayers_ReverseOrder_CMix", X_test_vec_dR_reverse,  "LSTM 25n 1L 60E 2Class Reverse Order" )
-#	LoadModel("V47_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_50nLSTMNodes_1nLayers_CMix_Retrain_40", X_test_vec_dR,  "LSTM 50n 1L 100E 2Class" )
-#	LoadModel("V47_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_50nLSTMNodes_1nLayers_CMix_LessC", X_test_vec_dR, "LSTM 50n 1L 60E 2Class LessC")
+	LoadModel("V56_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix", X_test_vec_dR, "Rel21 Z' LSTM 60E 4Class Sd0_{sig} order")
+	LoadModel("V56_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_SL0_CMix", X_test_vec_dR_SL0, "Rel21 Z' LSTM 60E 4Class SL0_{sig} order")
+	LoadModel("V56_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_SortpT_CMix", X_test_vec_dR_pT, "Rel21 Z' LSTM 60E 4Class p_{T} order")
 
-#	LoadModel("V47_LSTM_IP3D_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix", X_test_vec_IP3D, "LSTM(w/o pTFrac and dR 50n 1L 40E 4Class")
-#	LoadModel("V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_25nLSTMNodes_1nLayers_CMix", X_test_vec_dR, "LSTM 25n 1L 40E 4Class")
-#	LoadModel("V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix", X_test_vec_dR, "LSTM 50n 1L 40E 4Class")
-#	LoadModel("V47_LSTMMoreDense_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_25nLSTMNodes_1nLayers_CMix", X_test_vec_dR, "LSTM More Dense 25n 1L 40E 4Class")
-#	LoadModel("V47_LSTMMoreDense_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix", X_test_vec_dR, "LSTM More Dense 50n 1L 40E 4Class")
-#	LoadModel("V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_25nLSTMNodes_1nLayers_ReverseOrder_CMix",  X_test_vec_dR_reverse, "LSTM 25n 1L 40E 4Class Reverse Order" )
-#	LoadModel("V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_25nLSTMNodes_2nLayers_CMix", X_test_vec_dR, "LSTM 25n 2L 40E 4Class")
-#	LoadModel("V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_2nLayers_CMix", X_test_vec_dR, "LSTM 50n 2L 40E 4Class")
-#	LoadModel("V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_2nLayers_CMix", X_test_vec_dR, "LSTM 50n 4L 40E 2Class")
-#	LoadModel("V47_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_2nLayers_CMix", X_test_vec_dR, "LSTM 50n 4L 60E 2Class")
-#	LoadModel("V47_LSTM_Hits_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix", X_test_vec_Hits, "LSTM 50n 1L 40E 4Class Hits")
-#	LoadModel("V47_LSTM_Hits_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_75nLSTMNodes_1nLayers_CMix", X_test_vec_Hits, "LSTM 75n 1L 40E 4Class Hits")
-#	LoadModel("V47_LSTM_Hits_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix", X_test_vec_Hits, "LSTM 50n 1L 60E 4Class Hits")
-#	LoadModel("V47_LSTM_Hits_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_75nLSTMNodes_1nLayers_CMix", X_test_vec_Hits, "LSTM 75n 1L 60E 4Class Hits")
-#	LoadModel("V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_25nLSTMNodes_2nLayers_CMix_Retrain_40", X_test_vec_dR, "LSTM 25n 2L 80E 4Class")
-#	LoadModel("V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_2nLayers_CMix_Retrain_40", X_test_vec_dR, "LSTM 50n 2L 80E 4Class")
-#	LoadModel("V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_SL0_CMix", X_test_vec_dR_SL0, "LSTM 50n 1L 40E 4Class sqrt(sd0^2+sz0^2) Order" )
-#	LoadModel("V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_25nLSTMNodes_1nLayers_CMix_JetpTReweight", X_test_vec_dR,  "LSTM 25n 1L 40E 4Class Jet pTReweight" )
-#	LoadModel("V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix_JetpTReweight", X_test_vec_dR,  "LSTM 50n 1L 40E 4Class Jet pTReweight" )
-#	LoadModel("V47_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_25nLSTMNodes_1nLayers_CMix", X_test_vec_dR,  "LSTM 25n 1L 60E 4Class")
-#	LoadModel("V47_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix", X_test_vec_dR,  "LSTM 50n 1L 60E 4Class")
-#	LoadModel("V47_LSTM_dR_60epoch_5000kEvts_0nTrackCut_20nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix", X_test_vec_dR_20trk,  "LSTM 50n 1L 60E 4Class 20trk")
-#	LoadModel("V47_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix_5EmbedSize", X_test_vec_dR,  "LSTM 50n 1L 60E 4Class 5Embed")
-#	LoadModel("V47_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_25nLSTMNodes_1nLayers_ReverseOrder_CMix", X_test_vec_dR_reverse,  "LSTM 25n 1L 60E 4Class Reverse Order" )
-#	LoadModel("V47_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix_Retrain_40", X_test_vec_dR,  "LSTM 50n 1L 100E 4Class" )
-#	LoadModel("V47_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix_LessC", X_test_vec_dR, "LSTM 50n 1L 60E 4Class LessC")
+	LoadModel("V56_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix_JetpTReweight", X_test_vec_dR, "Rel21 Z' LSTM 60E 4Class Sd0_{sig} order pTReweight")
+	LoadModel("V56_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_SL0_CMix_JetpTReweight", X_test_vec_dR_SL0, "Rel21 Z' LSTM 60E 4Class SL0_{sig} order pTReweight")
+	LoadModel("V56_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_SortpT_CMix_JetpTReweight", X_test_vec_dR_pT, "Rel21 Z' LSTM 60E 4Class pT order pTReweight")
 
-#	LoadModel("V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_25nLSTMNodes_1nLayers_CMix", X_test_vec_dR, "LSTM 25n 1L 40E 4Class")
-#	LoadModel("V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix", X_test_vec_dR, "LSTM 50n 1L 40E 4Class")
-#	LoadModel("V47_LSTMMoreDense_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_25nLSTMNodes_1nLayers_CMix", X_test_vec_dR, "LSTM More Dense 25n 1L 40E 4Class")
-#	LoadModel("V47_LSTMMoreDense_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix", X_test_vec_dR, "LSTM More Dense 50n 1L 40E 4Class")
-#	LoadModel("V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_25nLSTMNodes_1nLayers_ReverseOrder_CMix",  X_test_vec_dR_reverse, "LSTM 25n 1L 40E 4Class Reverse Order" )
-#	LoadModel("V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_25nLSTMNodes_2nLayers_CMix", X_test_vec_dR, "LSTM 25n 2L 40E 4Class")
-#	LoadModel("V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_2nLayers_CMix", X_test_vec_dR, "LSTM 50n 2L 40E 4Class")
-#	LoadModel("V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_25nLSTMNodes_2nLayers_CMix_Retrain_40", X_test_vec_dR, "LSTM 25n 2L 80E 4Class")
-#	LoadModel("V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_2nLayers_CMix_Retrain_40", X_test_vec_dR, "LSTM 50n 2L 80E 4Class")
-#	LoadModel("V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_SL0_CMix", X_test_vec_dR_SL0, "LSTM 50n 1L 40E 4Class sqrt(sd0^2+sz0^2) Order" )
-#	LoadModel("V47_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_25nLSTMNodes_1nLayers_CMix", X_test_vec_dR,  "LSTM 25n 1L 60E 4Class")
-#	LoadModel("V47_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix", X_test_vec_dR,  "LSTM 50n 1L 60E 4Class")
-#	LoadModel("V47_LSTM_dR_60epoch_5000kEvts_0nTrackCut_20nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix", X_test_vec_dR_20trk,  "LSTM 50n 1L 60E 4Class 20trk")
-#	LoadModel("V47_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix_5EmbedSize", X_test_vec_dR,  "LSTM 50n 1L 60E 4Class 5Embed")
-#	LoadModel("V47_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_25nLSTMNodes_1nLayers_ReverseOrder_CMix", X_test_vec_dR_reverse,  "LSTM 25n 1L 60E 4Class Reverse Order" )
-#	LoadModel("V47_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix_Retrain_40", X_test_vec_dR,  "LSTM 50n 1L 100E 4Class" )
-
-
-#	LoadModel("V47_RNNSV1_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_25nLSTMNodes_1nLayers_CMix", X_test_vec_sv1_dR, "RNN+SV1 25n 1L 40E 2Class")
-#	LoadModel("V47_RNNSV1_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_50nLSTMNodes_1nLayers_CMix", X_test_vec_sv1_dR, "RNN+SV1 50n 1L 40E 2Class")
-#	LoadModel("V47_RNNSV1_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_25nLSTMNodes_1nLayers_CMix", X_test_vec_sv1_dR, "RNN+SV1 25n 1L 40E 4Class")
-#	LoadModel("V47_RNNSV1_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix", X_test_vec_sv1_dR, "RNN+SV1 50n 1L 40E 4Class")
-
-	LoadModel("V47_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix", X_test_vec_dR, "LSTM New trian 60E 4Class")
-	LoadModel("V47_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_50nLSTMNodes_1nLayers_CMix", X_test_vec_dR, "LSTM New trian 60E 2Class")
 
 	def DrawROC(models, outputName, bkg="l"):
 		labels = ["IP3D", "SV1", "MV2C10"]
@@ -1065,7 +992,7 @@ def compareROC():
 
 
         def getScoreCutList(scoreList):
-		bins = [20, 50, 80, 120, 200, 300, 500, 800]
+		bins = 	[100, 300, 500, 900, 1100, 1500, 2000, 3000]
                 return plottingUtils.getFixEffCurve(scoreList = scoreList,  varList = pt_test[labels_test_dR[:,0]==5]/1000.0,
 						    label = "IdontCare",
 						    bins = bins,
@@ -1076,8 +1003,8 @@ def compareROC():
 
         def DrawFlatEfficiencyCurves(models, outputName):
 		labels = ["IP3D", "SV1", "MV2C10"]
-		bins = [20, 50, 80, 120, 200, 300, 500, 800]
-                varList = pt_test[labels_test_dR[:,0]==0]
+		bins = 	[100, 300, 500, 900, 1100, 1500, 2000, 3000]
+		varList = pt_test[labels_test_dR[:,0]==0]
 		varList = varList/1000.
 		
 		bscores = [ip3d_test[labels_test_dR[:,0]==5], SV1_test[labels_test_dR[:,0]==5], MV2_test[labels_test_dR[:,0]==5]]
@@ -1085,6 +1012,17 @@ def compareROC():
 
 		for m in models:
 			labels.append( m.label)
+			if "Hits" in  m.filebase:
+
+				try :
+					bscores.append( m.pred[labels_test_Hits[:,0]==5, 0] )
+					lscores.append( m.pred[labels_test_Hits[:,0]==0, 0] )
+				except IndexError:
+					bscores.append( m.pred[labels_test_Hits[:,0]==5] )
+					lscores.append( m.pred[labels_test_Hits[:,0]==0] )
+				continue
+
+				
 			try :
 				bscores.append( m.pred[labels_test_dR[:,0]==5, 0] )
 				lscores.append( m.pred[labels_test_dR[:,0]==0, 0] )
@@ -1099,191 +1037,62 @@ def compareROC():
 
                 plottingUtils.MultipleFlatEffCurve( outputName,  approachList = approachList, bins = bins )
 
-#	Comp_GRU= [ 	SavedModels["V47_GRU_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_25nLSTMNodes_1nLayers_CMix"],
-#			SavedModels["V47_GRU_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_50nLSTMNodes_1nLayers_CMix"],
-#			SavedModels["V47_GRU_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_60nLSTMNodes_1nLayers_CMix"],
-#			SavedModels["V47_GRU_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_25nLSTMNodes_1nLayers_CMix"],
-#			SavedModels["V47_GRU_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix"],
-#			SavedModels["V47_GRU_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_60nLSTMNodes_1nLayers_CMix"]]
-#
-#
-# 	Comp_LSTM_2Class_MoreDense = [SavedModels["V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_25nLSTMNodes_1nLayers_CMix"],
-#				      SavedModels["V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_50nLSTMNodes_1nLayers_CMix"],
-#				      SavedModels["V47_LSTMMoreDense_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_25nLSTMNodes_1nLayers_CMix"],
-#				      SavedModels["V47_LSTMMoreDense_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_50nLSTMNodes_1nLayers_CMix"]]
-#
-# 	Comp_LSTM_2Class_2nLayer  = [SavedModels["V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_25nLSTMNodes_1nLayers_CMix"],
-#				     SavedModels["V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_50nLSTMNodes_1nLayers_CMix"],
-#				     SavedModels["V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_50nLSTMNodes_2nLayers_CMix"],
-#				     SavedModels["V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_50nLSTMNodes_2nLayers_CMix_Retrain_40"]]
-#
-#
-# 	Comp_LSTM_2Class_Order   = [SavedModels["V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_25nLSTMNodes_1nLayers_CMix"],
-#				    SavedModels["V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_25nLSTMNodes_1nLayers_ReverseOrder_CMix"],
-#				    SavedModels["V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_50nLSTMNodes_1nLayers_CMix"],
-#				    SavedModels["V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_50nLSTMNodes_1nLayers_SL0_CMix"]]
-#
-#
-# 	Comp_LSTM_2Class_JetpTReweight = [SavedModels["V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_25nLSTMNodes_1nLayers_CMix"],
-#					  SavedModels["V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_50nLSTMNodes_1nLayers_CMix"],
-#					  SavedModels["V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_25nLSTMNodes_1nLayers_CMix_JetpTReweight"],
-#					  SavedModels["V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_50nLSTMNodes_1nLayers_CMix_JetpTReweight"], 
-#					  SavedModels["V47_LSTM_IP3D_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_50nLSTMNodes_1nLayers_CMix"]]
-#
-#
-# 	Comp_LSTM_2Class_Epoch         = [SavedModels["V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_25nLSTMNodes_1nLayers_CMix"],
-#					  SavedModels["V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_50nLSTMNodes_1nLayers_CMix"],
-#					  SavedModels["V47_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_50nLSTMNodes_1nLayers_CMix"],
-#					  SavedModels["V47_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_50nLSTMNodes_1nLayers_CMix_Retrain_40"],
-#					  SavedModels["V47_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_50nLSTMNodes_1nLayers_CMix_5EmbedSize"]]
-#
-#
-# 	Comp_LSTM_2Class_LessC         = [SavedModels["V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_25nLSTMNodes_1nLayers_CMix"],
-#					  SavedModels["V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_50nLSTMNodes_1nLayers_CMix"],
-#					  SavedModels["V47_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_50nLSTMNodes_1nLayers_CMix"],
-#					  SavedModels["V47_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_50nLSTMNodes_1nLayers_CMix_LessC"]]
-#
-#
-# 	Comp_LSTM_4Class_MoreDense = [SavedModels["V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_25nLSTMNodes_1nLayers_CMix"],
-#				      SavedModels["V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix"],
-#				      SavedModels["V47_LSTMMoreDense_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_25nLSTMNodes_1nLayers_CMix"],
-#				      SavedModels["V47_LSTMMoreDense_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix"]]
-#
-# 	Comp_LSTM_4Class_2nLayer  = [SavedModels["V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_25nLSTMNodes_1nLayers_CMix"],
-#				     SavedModels["V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix"],
-#				     SavedModels["V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_2nLayers_CMix"],
-#				     SavedModels["V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_2nLayers_CMix_Retrain_40"]]
-#
-#
-# 	Comp_LSTM_4Class_Order   = [SavedModels["V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_25nLSTMNodes_1nLayers_CMix"],
-#				    SavedModels["V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_25nLSTMNodes_1nLayers_ReverseOrder_CMix"],
-#				    SavedModels["V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix"],
-#				    SavedModels["V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_SL0_CMix"]]
-#
-#
-# 	Comp_LSTM_4Class_JetpTReweight = [SavedModels["V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_25nLSTMNodes_1nLayers_CMix"],
-#					  SavedModels["V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix"],
-#					  SavedModels["V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_25nLSTMNodes_1nLayers_CMix_JetpTReweight"],
-#					  SavedModels["V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix_JetpTReweight"], 
-#					  SavedModels["V47_LSTM_IP3D_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix"]]
-#
-#
-# 	Comp_LSTM_4Class_Epoch         = [SavedModels["V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_25nLSTMNodes_1nLayers_CMix"],
-#					  SavedModels["V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix"],
-#					  SavedModels["V47_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix"],
-#					  SavedModels["V47_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix_Retrain_40"],
-#					  SavedModels["V47_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix_5EmbedSize"]]
-#
-#
-# 	Comp_LSTM_4Class_LessC         = [SavedModels["V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_25nLSTMNodes_1nLayers_CMix"],
-#					  SavedModels["V47_LSTM_dR_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix"],
-#					  SavedModels["V47_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix"],
-#					  SavedModels["V47_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix_LessC"]]
+	def DrawLEff_pT(  models, labels, pt):
+		approachList = [
+			(ip3d_test[labels_test_dR[:,0]==5], pt_test[labels_test_dR[:,0]==5]/1000., 
+			 ip3d_test[labels_test_dR[:,0]==0], pt_test[labels_test_dR[:,0]==0]/1000., ("EffCurve_IP3D", "IP3D Signal Efficiency")),
+			(SV1_test[labels_test_dR[:,0]==5], pt_test[labels_test_dR[:,0]==5]/1000.,
+			 SV1_test[labels_test_dR[:,0]==0], pt_test[labels_test_dR[:,0]==0]/1000., ("EffCurve_SV1", "SV1 Signal Efficiency")),                                         
+			(MV2_test[labels_test_dR[:,0]==5], pt_test[labels_test_dR[:,0]==5]/1000.,
+			 MV2_test[labels_test_dR[:,0]==0], pt_test[labels_test_dR[:,0]==0]/1000., ("EffCurve_MV2", "MV2 Signal Efficiency"))]
+
+		for m in models:
+			approachList.append( (m.pred[labels[:,0]==5], pt[ labels[:,0]==5]/1000.,
+					      m.pred[labels[:,0]==0], pt[ labels[:,0]==0]/1000., ("EffCurve_"+m.label, m.label+" Efficiency")) )
+			
+		plottingUtils.MultipleRejCurve(
+			outputName = "LEffCurveCompare_pT.root", 
+			approachList = approachList,
+			bins = 	[100, 300, 500, 900, 1100, 1500, 2000, 3000],
+			eff_target = 0.7,)
 
 
-# 	Comp_LSTM_2Class_Hits         = [SavedModels["V47_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_25nLSTMNodes_1nLayers_CMix"],
-#					 SavedModels["V47_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_50nLSTMNodes_1nLayers_CMix"],
-#					 SavedModels["V47_LSTM_Hits_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_50nLSTMNodes_1nLayers_CMix"],
-#					 SavedModels["V47_LSTM_Hits_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_75nLSTMNodes_1nLayers_CMix"],
-#					 SavedModels["V47_LSTM_Hits_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_50nLSTMNodes_1nLayers_CMix"],
-#					 SavedModels["V47_LSTM_Hits_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_75nLSTMNodes_1nLayers_CMix"]]
-#
-# 	Comp_LSTM_4Class_Hits         = [SavedModels["V47_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_25nLSTMNodes_1nLayers_CMix"],
-#					 SavedModels["V47_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix"],
-#					 SavedModels["V47_LSTM_Hits_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix"],
-#					 SavedModels["V47_LSTM_Hits_40epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_75nLSTMNodes_1nLayers_CMix"],
-#					 SavedModels["V47_LSTM_Hits_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix"],
-#					 SavedModels["V47_LSTM_Hits_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_75nLSTMNodes_1nLayers_CMix"]]
 
-	Comp_Quick_4Class             = [SavedModels["V47_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix"]]
-	Comp_Quick_2Class             = [SavedModels["V47_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_2nLSTMClass_50nLSTMNodes_1nLayers_CMix"]]
+	def DrawBEff_pT( models, labels, pt):
+		approachList = [  
+			(ip3d_test[labels_test_dR[:,0]==5], pt_test[labels_test_dR[:,0]==5]/1000., ("EffCurve_IP3D", "IP3D Signal Efficiency")),
+			(SV1_test[labels_test_dR[:,0]==5], pt_test[labels_test_dR[:,0]==5]/1000., ("EffCurve_SV1", "SV1 Signal Efficiency")),                                         
+			(MV2_test[labels_test_dR[:,0]==5], pt_test[labels_test_dR[:,0]==5]/1000., ("EffCurve_MV2", "MV2 Signal Efficiency"))]
+		for m in models:
+			approachList.append( (m.pred[labels[:,0]==5], pt[ labels[:,0]==5]/1000.,("EffCurve_"+m.label, m.label+" Efficiency")))
 
+		plottingUtils.MultipleEffCurve(                                 
+			outputName = "BEffCurveCompare_pT.root",   
+			approachList = approachList,
+			bins = 	[100, 300, 500, 900, 1100, 1500, 2000, 3000],
+			eff_target = 0.7,)
+
+#	Comp_Quick_4Class             = [SavedModels["V51_LSTM_Hits_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix"],
+#					 SavedModels["V51_LSTM_Hits_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix_JetpTReweight"]]
+
+	Comp_Quick_4Class = [SavedModels["V56_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix"],
+			     SavedModels["V56_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix_JetpTReweight"],
+			     SavedModels["V56_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_SL0_CMix"],
+			     SavedModels["V56_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_SL0_CMix_JetpTReweight"],
+			     SavedModels["V56_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_SortpT_CMix"],
+			     SavedModels["V56_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_SortpT_CMix_JetpTReweight"]]
 
 	
-#	DrawFlatEfficiencyCurves(Comp_GRU, "RejAtFlatEff_GRU.root")
-#	DrawFlatEfficiencyCurves(Comp_LSTM_2Class, "RejAtFlatEff_LSTM_2Class.root")
-#	DrawFlatEfficiencyCurves(Comp_LSTM_4Class, "RejAtFlatEff_LSTM_4Class.root")
-#	DrawFlatEfficiencyCurves(Comp_LSTM_SV1, "RejAtFlatEff_LSTM_SV1.root")
-
-	DrawROC(Comp_Quick_2Class,         "BL_2Class_Layer.root", bkg="l")
 	DrawROC(Comp_Quick_4Class,         "BL_4Class_Layer.root", bkg="l")
+	DrawROC(Comp_Quick_4Class,         "BC_4Class_Layer.root", bkg="c")
+	DrawFlatEfficiencyCurves(Comp_Quick_4Class,   "RejAtFlatEff_4Class.root")
+	DrawLEff_pT(  Comp_Quick_4Class, labels_test_dR, pt_test)
+	DrawBEff_pT(  Comp_Quick_4Class, labels_test_dR, pt_test)
 
-#	DrawROC(Comp_GRU,         "GRU_BL_Layer.root", bkg="l")
-#	DrawROC(Comp_GRU,         "GRU_BC_Layer.root", bkg="c")
-#	DrawROC(Comp_LSTM_2Class_Hits,         "LSTM_2Class_Hits_l.root", bkg="l")
-#	DrawROC(Comp_LSTM_4Class_Hits,         "LSTM_4Class_Hits_l.root", bkg="l")
-#	DrawROC(Comp_LSTM_2Class_Hits,         "LSTM_2Class_Hits_c.root", bkg="c")
-#	DrawROC(Comp_LSTM_4Class_Hits,         "LSTM_4Class_Hits_c.root", bkg="c")
-#	DrawROC(Comp_LSTM_2Class_MoreDense, "LSTM_2Class_MoreDense_l.root", bkg = "l")
-#	DrawROC(Comp_LSTM_2Class_MoreDense, "LSTM_2Class_MoreDense_c.root", bkg = "c")
-#	DrawROC(Comp_LSTM_2Class_2nLayer,   "LSTM_2Class_2nLayer_l.root", bkg = "l")
-#	DrawROC(Comp_LSTM_2Class_2nLayer,   "LSTM_2Class_2nLayer_c.root", bkg = "c")
-#	DrawROC(Comp_LSTM_2Class_Order,   "LSTM_2Class_Order_l.root", bkg = "l")
-#	DrawROC(Comp_LSTM_2Class_Order,   "LSTM_2Class_Order_c.root", bkg = "c")
-#	DrawROC(Comp_LSTM_2Class_JetpTReweight,   "LSTM_2Class_JetpTReweight_l.root", bkg = "l")
-#	DrawROC(Comp_LSTM_2Class_JetpTReweight,   "LSTM_2Class_JetpTReweight_c.root", bkg = "c")
-#	DrawROC(Comp_LSTM_2Class_Epoch,   "LSTM_2Class_Epoch_l.root", bkg = "l")
-#	DrawROC(Comp_LSTM_2Class_Epoch,   "LSTM_2Class_Epoch_c.root", bkg = "c")
-#	DrawROC(Comp_LSTM_2Class_LessC,   "LSTM_2Class_LessC_l.root", bkg = "l")
-#	DrawROC(Comp_LSTM_2Class_LessC,   "LSTM_2Class_LessC_c.root", bkg = "c")
-#
-#	DrawFlatEfficiencyCurves(Comp_GRU,                          "RejAtFlatEffGRU.root")
-#	DrawFlatEfficiencyCurves(Comp_LSTM_2Class_MoreDense,        "RejAtFlatEff_2Class_MoreDense.root")
-#	DrawFlatEfficiencyCurves(Comp_LSTM_2Class_2nLayer,          "RejAtFlatEff_2Class_2nLayer.root")
-#	DrawFlatEfficiencyCurves(Comp_LSTM_2Class_Order,            "RejAtFlatEff_2Class_Order.root")
-#	DrawFlatEfficiencyCurves(Comp_LSTM_2Class_JetpTReweight,    "RejAtFlatEff_2Class_JetpTReweight.root")
-#	DrawFlatEfficiencyCurves(Comp_LSTM_2Class_Epoch,            "RejAtFlatEff_2Class_Epoch.root")
-#	DrawFlatEfficiencyCurves(Comp_LSTM_2Class_LessC,            "RejAtFlatEff_2Class_LessC.root")
-#
-#	DrawROC(Comp_LSTM_4Class_MoreDense, "LSTM_4Class_MoreDense_l.root", bkg = "l")
-#	DrawROC(Comp_LSTM_4Class_MoreDense, "LSTM_4Class_MoreDense_c.root", bkg = "c")
-#	DrawROC(Comp_LSTM_4Class_2nLayer,   "LSTM_4Class_2nLayer_l.root", bkg = "l")
-#	DrawROC(Comp_LSTM_4Class_2nLayer,   "LSTM_4Class_2nLayer_c.root", bkg = "c")
-#	DrawROC(Comp_LSTM_4Class_Order,   "LSTM_4Class_Order_l.root", bkg = "l")
-#	DrawROC(Comp_LSTM_4Class_Order,   "LSTM_4Class_Order_c.root", bkg = "c")
-#	DrawROC(Comp_LSTM_4Class_JetpTReweight,   "LSTM_4Class_JetpTReweight_l.root", bkg = "l")
-#	DrawROC(Comp_LSTM_4Class_JetpTReweight,   "LSTM_4Class_JetpTReweight_c.root", bkg = "c")
-#	DrawROC(Comp_LSTM_4Class_Epoch,   "LSTM_4Class_Epoch_l.root", bkg = "l")
-#	DrawROC(Comp_LSTM_4Class_Epoch,   "LSTM_4Class_Epoch_c.root", bkg = "c")
-#	DrawROC(Comp_LSTM_4Class_LessC,   "LSTM_4Class_LessC_l.root", bkg = "l")
-#	DrawROC(Comp_LSTM_4Class_LessC,   "LSTM_4Class_LessC_c.root", bkg = "c")
-#
-#	DrawFlatEfficiencyCurves(Comp_LSTM_4Class_MoreDense,        "RejAtFlatEff_4Class_MoreDense.root")
-#	DrawFlatEfficiencyCurves(Comp_LSTM_4Class_2nLayer,          "RejAtFlatEff_4Class_2nLayer.root")
-#	DrawFlatEfficiencyCurves(Comp_LSTM_4Class_Order,            "RejAtFlatEff_4Class_Order.root")
-#	DrawFlatEfficiencyCurves(Comp_LSTM_4Class_JetpTReweight,    "RejAtFlatEff_4Class_JetpTReweight.root")
-#	DrawFlatEfficiencyCurves(Comp_LSTM_4Class_Epoch,            "RejAtFlatEff_4Class_Epoch.root")
-#	DrawFlatEfficiencyCurves(Comp_LSTM_4Class_LessC,            "RejAtFlatEff_4Class_LessC.root")
+	#DrawLEff_pT(  Comp_Quick_4Class, labels_test_dR, pt_test_Hits)
+	#DrawBEff_pT(  Comp_Quick_4Class, labels_test_dR, pt_test_Hits)
 
-	sys.exit(0)
-
-
-#        print "Making b jet efficiency v.s. pT curve ... "
-#        plottingUtils.MultipleEffCurve(                                 
-#		outputName = "BEffCurveCompare_pT.root",                                                                                                                                    
-#		approachList = [                                 
-#			(ip3d_test[labels_test[:,0]==5], pt_test[labels_test[:,0]==5], ("EffCurve_IP3D", "IP3D Signal Efficiency")),                                         
-#			(SV1_test[labels_test[:,0]==5], pt_test[labels_test[:,0]==5], ("EffCurve_SV1", "SV1 Signal Efficiency")),                                         
-#			(MV2_test[labels_test[:,0]==5], pt_test[labels_test[:,0]==5], ("EffCurve_MV2", "MV2 Signal Efficiency")),                                         
-#			(RNNpred[labels_test[:,0]==5,0], pt_test[labels_test[:,0]==5], ("EffCurve_RNN1HiddenLSTM", "RNN-1HiddenLSTM")),                      
-#			(RNNPlusSV1pred[labels_test[:,0]==5,0], pt_test[labels_test[:,0]==5], ("EffCurve_RNN1HiddenLSTMSV1", "RNN-1HiddenLSTM+SV1")),                      
-#			(RNNPlusMV2pred[labels_test[:,0]==5,0], pt_test[labels_test[:,0]==5], ("EffCurve_RNN1HiddenLSTMMV2", "RNN-1HiddenLSTM+MV2")), ],
-#		bins = [20, 50, 80, 120, 200, 300, 500, 800],
-#		eff_target = 0.7,)
-
-
-#        print "Making b jet efficiency v.s. ntrk curve ... "
-#        plottingUtils.MultipleEffCurve(                                 
-#		outputName = "BEffCurveCompare_ntrk.root",                                                                                                                                    
-#		approachList = [                                 
-#			(ip3d_test[labels_test[:,0]==5], ntrk_test[labels_test[:,0]==5], ("EffCurve_IP3D", "IP3D Signal Efficiency")),                                         
-#			(pred1[labels_test[:,0]==5,0], ntrk_test[labels_test[:,0]==5], ("EffCurve_RNN1HiddenLSTM", "RNN-1HiddenLSTM")),                      
-#			(pred2[labels_test[:,0]==5,0], ntrk_test[labels_test[:,0]==5], ("EffCurve_RNN1HiddenLSTMpTFrac", "RNN-1HiddenLSTM (w/ pT frac)")),                      
-#			(pred3[labels_test[:,0]==5,0], ntrk_test[labels_test[:,0]==5], ("EffCurve_RNN1HiddenLSTMpTFracdR", "RNN-1HiddenLSTM (w/ pT frac and dR)")), ],
-#		bins = range(1, 42),
-#		eff_target = 0.7,)
-
-
+        print "Making b jet efficiency v.s. pT curve ... "
 
 
 ########################################
@@ -1292,7 +1101,7 @@ if __name__ == "__main__":
 	if o.doBatch == "y":
 		currentPWD = os.getcwd()
 
-		modelname = "V47_" + o.Model + "_"+ o.Variables + "_" + o.nEpoch + "epoch_" + str( n_events/1000) + 'kEvts_' + str( o.nTrackCut) + 'nTrackCut_' +  o.nMaxTrack + "nMaxTrack_" + o.nLSTMClass +"nLSTMClass_" + o.nLSTMNodes +"nLSTMNodes_"+o.nLayers + "nLayers"
+		modelname = o.Version +"_" + o.Model + "_"+ o.Variables + "_" + o.nEpoch + "epoch_" + str( n_events/1000) + 'kEvts_' + str( o.nTrackCut) + 'nTrackCut_' +  o.nMaxTrack + "nMaxTrack_" + o.nLSTMClass +"nLSTMClass_" + o.nLSTMNodes +"nLSTMNodes_"+o.nLayers + "nLayers"
 		if o.TrackOrder == 'pT':
 			modelname += "_SortpT"
 		if o.TrackOrder == 'Reverse':
@@ -1316,7 +1125,7 @@ if __name__ == "__main__":
 		if o.doJetpTReweight == "y":
 			modelname += "_JetpTReweight"
 		
-		cmd = "bsub -q atlas-t3 -W 80:00 -o 'output/" + modelname + "' THEANO_FLAGS='base_compiledir=" + currentPWD + "/BatchCompileDir/0/' python lstmUtils.py --nEpoch " + o.nEpoch + " --Mode " + o.Mode + " --Var " + o.Variables + " --nEvents " + o.nEvents + " --doTrainC " + o.doTrainC + " --nMaxTrack " + o.nMaxTrack + " --TrackOrder " + o.TrackOrder + " --padding " + o.padding + " --Model " + o.Model + " --nTrackCut " + o.nTrackCut + " --AddJetpT " + o.AddJetpT + " --nLSTMClass " + o.nLSTMClass + " --nLSTMNodes " + o.nLSTMNodes + " --nLayers "+o.nLayers + " --EmbedSize " + o.EmbedSize + " --Filebase " + o.filebase + " --doLessC "+o.doLessC + " --doJetpTReweight " + o.doJetpTReweight
+		cmd = "bsub -q atlas-t3 -W 80:00 -o 'output/" + modelname + "' THEANO_FLAGS='base_compiledir=" + currentPWD + "/BatchCompileDir/0/' python lstmUtils.py --nEpoch " + o.nEpoch + " --Mode " + o.Mode + " --Var " + o.Variables + " --nEvents " + o.nEvents + " --doTrainC " + o.doTrainC + " --nMaxTrack " + o.nMaxTrack + " --TrackOrder " + o.TrackOrder + " --padding " + o.padding + " --Model " + o.Model + " --nTrackCut " + o.nTrackCut + " --AddJetpT " + o.AddJetpT + " --nLSTMClass " + o.nLSTMClass + " --nLSTMNodes " + o.nLSTMNodes + " --nLayers "+o.nLayers + " --EmbedSize " + o.EmbedSize + " --Filebase " + o.filebase + " --doLessC "+o.doLessC + " --doJetpTReweight " + o.doJetpTReweight + " --Version " + o.Version
 
 		print cmd
 		os.system(cmd)

@@ -26,22 +26,28 @@ outfileName = "Dataset_V47_IP3D_pTFrac_d0_z0_5m.pkl"
 #outfileName = "Dataset_V47_IP3D_pTFrac_dR_5m.pkl"
 #outfileName = "Dataset_V47_IP3D_pTFrac_dR_reverse_sd0order_5m.pkl"
 #outfileName = "Dataset_V47_IP3D_pTFrac_dR_sv1_5m.pkl"
-outfileName = "Dataset_V47_IP3D_pTFrac_dR_hits_3m.pkl"
+
+#outfileName = "Dataset_V51_IP3D_pTFrac_dR_hits_3m.pkl"
+#outfileName = "Dataset_V56_IP3D_pTFrac_dR_hits_3m.pkl"
+#outfileName = "Dataset_V56_IP3D_pTFrac_dR_sl0order_hits_3m.pkl"
+#outfileName = "Dataset_V56_IP3D_pTFrac_dR_pt_hits_3m.pkl"
+
+outfileName = "Dataset_V61_IP3D_pTFrac_dR_hits_3m.pkl"
 
 ##################
 print "- Making File List"
 
 #ROOTfileNames = glob.glob("/atlas/local/BtagOptimizationNtuples/group.perf-flavtag.mc15_13TeV.410000.PowhegPythiaEvtGen_s2608_s2183_r7377_r7351.BTAGNTUP_V42cfull_Akt4EMTo/*.root*")
-ROOTfileNames = glob.glob("/atlas/local/BtagOptimizationNtuples/V47/group.perf-flavtag.mc15_13TeV.410000.PowhegPythiaEvtGen_s2608_s2183_r7725_r7676.BTAGNTUP_V47_full_Akt4EMTo/*.root*")
-#ROOTfileNames = glob.glob("/atlas/local/BtagOptimizationNtuples/V47/group.perf-flavtag.mc15_13TeV.410000.PowhegPythiaEvtGen_s2608_s2183_r7725_r7676.BTAGNTUP_V47_full_Akt4EMTo/group.perf-flavtag.8324358.Akt4EMTo._001543.root")
-#"/atlas/local/BtagOptimizationNtuples/user.vdao.mc15_13TeV.410000.PowhegPythiaEvtGen_nonallhad.merge.AOD.e3698_s2608_s2183_r6630_r6264.BTAGNTUP_V9full_BTAGSTREAM.31148054/*.root*")
+#ROOTfileNames = glob.glob("/atlas/local/BtagOptimizationNtuples/V47/group.perf-flavtag.mc15_13TeV.410000.PowhegPythiaEvtGen_s2608_s2183_r7725_r7676.BTAGNTUP_V47_full_Akt4EMTo/*.root*")
+#ROOTfileNames = glob.glob("/atlas/local/BtagOptimizationNtuples/user.jshlomi.mc16_13TeV.410000.PowhegPythiaEvtGen_s2997_r8791_tid09907007_00.BTAGNTUP_V51full_Akt4EMTo/*.root*")
+ROOTfileNames = glob.glob("/atlas/local/BtagOptimizationNtuples/group.perf-flavtag.mc16_13TeV.410000.PowhegPythiaEvtGen_P2012_ttbar_hdamp172p5_nonallhade3668_s2997.BTAGNTUP_V61full_Akt4EMTo/*.root*")
 
 firstFile = True
 EventSum = 0
 
 out_trk_arr = None
 out_label_arr = None
-out_sv1_arr = None
+#out_sv1_arr = None
 
 for fname in ROOTfileNames:
 
@@ -66,16 +72,16 @@ for fname in ROOTfileNames:
         # array of events, event = array of jets,  jet  = array of variable
         ####################################################################################
         print "- extracting per track info"
-        sd0_raw =  rnp.tree2array(tree, "jet_trk_ip3d_d0sig",  stop=Nleft).flatten()
-        sz0_raw =  rnp.tree2array(tree, "jet_trk_ip3d_z0sig",  stop=Nleft).flatten()
-        d0_raw =  rnp.tree2array(tree, "jet_trk_d0",  stop=Nleft).flatten()
-        z0_raw =  rnp.tree2array(tree, "jet_trk_z0",  stop=Nleft).flatten()
-        grade_raw =  rnp.tree2array(tree, "jet_trk_ip3d_grade",  stop=Nleft).flatten()
-        llr_raw =  rnp.tree2array(tree, "jet_trk_ip3d_llr",  stop=Nleft).flatten()
-        pt_raw =  rnp.tree2array(tree, "jet_trk_pt",  stop=Nleft).flatten()
-        eta_raw =  rnp.tree2array(tree, "jet_trk_eta",  stop=Nleft).flatten()
-        theta_raw =  rnp.tree2array(tree, "jet_trk_theta",  stop=Nleft).flatten()
-        phi_raw =  rnp.tree2array(tree, "jet_trk_phi",  stop=Nleft).flatten()
+        sd0_raw =   rnp.tree2array(tree, "jet_trk_ip3d_d0sig",  stop=Nleft).flatten()
+        sz0_raw =   rnp.tree2array(tree, "jet_trk_ip3d_z0sig",  stop=Nleft).flatten()
+        d0_raw =    rnp.tree2array(tree, "jet_trk_d0",  stop=Nleft).flatten()
+        z0_raw =    rnp.tree2array(tree, "jet_trk_z0",  stop=Nleft).flatten()
+        grade_raw = rnp.tree2array(tree, "jet_trk_ip3d_grade",  stop=Nleft).flatten()
+        llr_raw =   rnp.tree2array(tree, "jet_trk_ip3d_llr",  stop=Nleft).flatten()
+        pt_raw =    rnp.tree2array(tree, "jet_trk_pt",  stop=Nleft).flatten()
+        eta_raw =   rnp.tree2array(tree, "jet_trk_eta",  stop=Nleft).flatten()
+        theta_raw = rnp.tree2array(tree, "jet_trk_theta",  stop=Nleft).flatten()
+        phi_raw =   rnp.tree2array(tree, "jet_trk_phi",  stop=Nleft).flatten()
 
         nInnHits_raw =  rnp.tree2array(tree, "jet_trk_nInnHits",  stop=Nleft).flatten()
         nNextToInnHits_raw =  rnp.tree2array(tree, "jet_trk_nNextToInnHits",  stop=Nleft).flatten()
@@ -120,6 +126,7 @@ for fname in ROOTfileNames:
         for i in range(len(sd0_raw)):
             ################ sorting variable #######################
             #index_list = sorting_funcs.get_sort_index_list( sd0_raw[i].flatten()*sd0_raw[i].flatten()+sz0_raw[i].flatten()*sz0_raw[i].flatten(), sort_type="absrev" )
+            #index_list = sorting_funcs.get_sort_index_list( pt_raw[i], sort_type="absrev" )
             index_list = sorting_funcs.get_sort_index_list( sd0_raw[i].flatten(),  sort_type="absrev" )
             #index_list = sorting_funcs.get_sort_index_list( sd0_raw[i].flatten(),  sort_type="abs" )
             ################ sorting variable #######################
@@ -198,7 +205,6 @@ for fname in ROOTfileNames:
                 expectBLayerHit_arr =np.hstack( (expectBLayerHit_arr, expectBLayerHit_sort) )
 
 
-
         ####################################################################################
         #lables array
         # comes out as array of arrays  (NOT 2D array, but array of arrays)
@@ -221,12 +227,12 @@ for fname in ROOTfileNames:
         jet_aliveafterOR = np.hstack(tuple(rnp.tree2array(tree, "jet_aliveAfterOR",  stop=Nleft)))        
         jet_sv1_llr = np.hstack(tuple(rnp.tree2array(tree, "jet_sv1_llr", stop=Nleft)))        
         jet_JVT =        np.hstack(tuple(rnp.tree2array(tree, "jet_JVT",  stop=Nleft)))        
-        jet_sv1_ntrkv =   np.hstack(tuple(rnp.tree2array(tree, "jet_sv1_ntrkv",  stop=Nleft)))        
-        jet_sv1_n2t =   np.hstack(tuple(rnp.tree2array(tree, "jet_sv1_n2t",  stop=Nleft)))        
-        jet_sv1_m =   np.hstack(tuple(rnp.tree2array(tree, "jet_sv1_m",  stop=Nleft)))        
-        jet_sv1_efc =   np.hstack(tuple(rnp.tree2array(tree, "jet_sv1_efc",  stop=Nleft)))        
-        jet_sv1_sig3d =   np.hstack(tuple(rnp.tree2array(tree, "jet_sv1_sig3d",  stop=Nleft)))        
-        jet_sv1_normdist =   np.hstack(tuple(rnp.tree2array(tree, "jet_sv1_normdist",  stop=Nleft)))        
+        #jet_sv1_ntrkv =   np.hstack(tuple(rnp.tree2array(tree, "jet_sv1_ntrkv",  stop=Nleft)))        
+        #jet_sv1_n2t =   np.hstack(tuple(rnp.tree2array(tree, "jet_sv1_n2t",  stop=Nleft)))        
+        #jet_sv1_m =   np.hstack(tuple(rnp.tree2array(tree, "jet_sv1_m",  stop=Nleft)))        
+        #jet_sv1_efc =   np.hstack(tuple(rnp.tree2array(tree, "jet_sv1_efc",  stop=Nleft)))        
+        #jet_sv1_sig3d =   np.hstack(tuple(rnp.tree2array(tree, "jet_sv1_sig3d",  stop=Nleft)))        
+        #jet_sv1_normdist =   np.hstack(tuple(rnp.tree2array(tree, "jet_sv1_normdist",  stop=Nleft)))        
         
         pTFrac_arr = deepcopy(pt_arr)
         dR_arr = deepcopy(pt_arr)
@@ -294,18 +300,18 @@ for fname in ROOTfileNames:
                     
             njet += jet_njets[ievt]
 
-        sv1_arr = np.dstack( (  jet_sv1_ntrkv, jet_sv1_n2t, jet_sv1_m, jet_sv1_efc, jet_sv1_sig3d, jet_sv1_normdist, jet_sv1_L3d, jet_sv1_Lxy, jet_sv1_dR, jet_sv1_HasVTX ) )[0]            
+        #sv1_arr = np.dstack( (  jet_sv1_ntrkv, jet_sv1_n2t, jet_sv1_m, jet_sv1_efc, jet_sv1_sig3d, jet_sv1_normdist, jet_sv1_L3d, jet_sv1_Lxy, jet_sv1_dR, jet_sv1_HasVTX ) )[0]            
 
         if firstFile:
             out_trk_arr = trk_arr
             out_label_arr = label_arr
-            out_sv1_arr = sv1_arr
+            #out_sv1_arr = sv1_arr
             firstFile= False
 
         else:
             out_trk_arr = np.vstack( (out_trk_arr, trk_arr) )
             out_label_arr = np.vstack( (out_label_arr, label_arr) ) 
-            out_sv1_arr = np.vstack( (out_sv1_arr, sv1_arr) ) 
+            #out_sv1_arr = np.vstack( (out_sv1_arr, sv1_arr) ) 
 
 #        print 'jet pt', jet_pt
 #        print 'jet JVT', jet_JVT
@@ -316,7 +322,6 @@ print "- finished, saving"
 outfile = file(outfileName, 'wb')
 cPickle.dump(out_trk_arr, outfile, protocol=cPickle.HIGHEST_PROTOCOL)
 cPickle.dump(out_label_arr, outfile, protocol=cPickle.HIGHEST_PROTOCOL)
-cPickle.dump(out_sv1_arr, outfile, protocol=cPickle.HIGHEST_PROTOCOL)
 outfile.close()
 
 print "######### Summary #########"

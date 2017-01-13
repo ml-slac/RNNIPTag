@@ -167,8 +167,27 @@
 #python lstmUtils.py --doBatch y --nEpoch 40 --Mode M --Var Hits --nEvents 5000000 --doTrainC y --Model LSTM --padding pre --nMaxTrack 15 --nLSTMNodes 75 --nLSTMClass 2
 #python lstmUtils.py --doBatch y --nEpoch 40 --Mode M --Var Hits --nEvents 5000000 --doTrainC y --Model LSTM --padding pre --nMaxTrack 15 --nLSTMNodes 75 --nLSTMClass 4
 
-#python lstmUtils.py --doBatch y --nEpoch 60 --Mode M --Var dR --nEvents 5000000 --doTrainC y --Model LSTM --padding pre --nMaxTrack 15 --nLSTMNodes 50 --nLSTMClass 4
-#python lstmUtils.py --doBatch y --nEpoch 60 --Mode M --Var dR --nEvents 5000000 --doTrainC y --Model LSTM --padding pre --nMaxTrack 15 --nLSTMNodes 50 --nLSTMClass 2
 
-python lstmUtils.py --doBatch y --nEpoch 60 --Mode M --Var dR --nEvents 5000000 --doTrainC y --Model LSTM --padding pre --nMaxTrack 15 --nLSTMNodes 50 --nLSTMClass 4 --doJetpTReweight y
-python lstmUtils.py --doBatch y --nEpoch 60 --Mode M --Var dR --nEvents 5000000 --doTrainC y --Model LSTM --padding pre --nMaxTrack 15 --nLSTMNodes 50 --nLSTMClass 2 --doJetpTReweight y
+#python lstmUtils.py --doBatch y --nEpoch 60 --Mode M --Var dR --nEvents 5000000 --doTrainC y --Model LSTM --padding pre --nMaxTrack 15 --nLSTMNodes 50 --nLSTMClass 2
+#python lstmUtils.py --doBatch y --nEpoch 60 --Mode M --Var dR --nEvents 5000000 --doTrainC y --Model LSTM --padding pre --nMaxTrack 15 --nLSTMNodes 50 --nLSTMClass 2 --doJetpTReweight y
+
+
+python lstmUtils.py --doBatch y --Version V61 --nEpoch 60 --Mode M --Var dR --nEvents 3000000 --doTrainC y --Model LSTM --padding pre --nMaxTrack 15 --nLSTMNodes 50 --nLSTMClass 4
+python lstmUtils.py --doBatch y --Version V61 --nEpoch 60 --Mode M --Var dR --nEvents 3000000 --doTrainC y --Model LSTM --padding pre --nMaxTrack 15 --nLSTMNodes 50 --nLSTMClass 4 --doJetpTReweight y
+python lstmUtils.py --doBatch y --Version V61 --nEpoch 60 --Mode M --Var Hits --nEvents 3000000 --doTrainC y --Model LSTM --padding pre --nMaxTrack 15 --nLSTMNodes 50 --nLSTMClass 4
+python lstmUtils.py --doBatch y --Version V61 --nEpoch 60 --Mode M --Var Hits --nEvents 3000000 --doTrainC y --Model LSTM --padding pre --nMaxTrack 15 --nLSTMNodes 50 --nLSTMClass 4 --doJetpTReweight y
+
+python lstmUtils.py --doBatch y --Version V62 --nEpoch 60 --Mode M --Var dR --nEvents 3000000 --doTrainC y --Model LSTM --padding pre --nMaxTrack 15 --nLSTMNodes 50 --nLSTMClass 4
+python lstmUtils.py --doBatch y --Version V62 --nEpoch 60 --Mode M --Var dR --nEvents 3000000 --doTrainC y --Model LSTM --padding pre --nMaxTrack 15 --nLSTMNodes 50 --nLSTMClass 4 --doJetpTReweight y
+python lstmUtils.py --doBatch y --Version V62 --nEpoch 60 --Mode M --Var Hits --nEvents 3000000 --doTrainC y --Model LSTM --padding pre --nMaxTrack 15 --nLSTMNodes 50 --nLSTMClass 4
+python lstmUtils.py --doBatch y --Version V62 --nEpoch 60 --Mode M --Var Hits --nEvents 3000000 --doTrainC y --Model LSTM --padding pre --nMaxTrack 15 --nLSTMNodes 50 --nLSTMClass 4 --doJetpTReweight y
+
+#python lstmUtils.py --doBatch y --Version V56 --nEpoch 60 --Mode M --Var dR --nEvents 3000000 --doTrainC y --Model LSTM --padding pre --nMaxTrack 15 --nLSTMNodes 50 --TrackOrder SL0 --nLSTMClass 4
+#python lstmUtils.py --doBatch y --Version V56 --nEpoch 60 --Mode M --Var dR --nEvents 3000000 --doTrainC y --Model LSTM --padding pre --nMaxTrack 15 --nLSTMNodes 50 --TrackOrder SL0 --nLSTMClass 4 --doJetpTReweight y
+#python lstmUtils.py --doBatch y --Version V56 --nEpoch 60 --Mode M --Var Hits --nEvents 3000000 --doTrainC y --Model LSTM --padding pre --nMaxTrack 15 --nLSTMNodes 50 --TrackOrder SL0 --nLSTMClass 4
+#python lstmUtils.py --doBatch y --Version V56 --nEpoch 60 --Mode M --Var Hits --nEvents 3000000 --doTrainC y --Model LSTM --padding pre --nMaxTrack 15 --nLSTMNodes 50 --TrackOrder SL0 --nLSTMClass 4 --doJetpTReweight y
+#
+#python lstmUtils.py --doBatch y --Version V56 --nEpoch 60 --Mode M --Var dR --nEvents 3000000 --doTrainC y --Model LSTM --padding pre --nMaxTrack 15 --nLSTMNodes 50 --TrackOrder pT --nLSTMClass 4
+#python lstmUtils.py --doBatch y --Version V56 --nEpoch 60 --Mode M --Var dR --nEvents 3000000 --doTrainC y --Model LSTM --padding pre --nMaxTrack 15 --nLSTMNodes 50 --TrackOrder pT --nLSTMClass 4 --doJetpTReweight y
+#python lstmUtils.py --doBatch y --Version V56 --nEpoch 60 --Mode M --Var Hits --nEvents 3000000 --doTrainC y --Model LSTM --padding pre --nMaxTrack 15 --nLSTMNodes 50 --TrackOrder pT --nLSTMClass 4
+#python lstmUtils.py --doBatch y --Version V56 --nEpoch 60 --Mode M --Var Hits --nEvents 3000000 --doTrainC y --Model LSTM --padding pre --nMaxTrack 15 --nLSTMNodes 50 --TrackOrder pT --nLSTMClass 4 --doJetpTReweight y
