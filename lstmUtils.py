@@ -6,6 +6,7 @@ import cPickle
 import sys
 from copy import deepcopy
 import os
+import ROOT
 
 from keras.preprocessing import sequence
 from keras.optimizers import SGD, RMSprop, Adagrad
@@ -65,6 +66,12 @@ max_embed_features = 16
 embed_size = int(o.EmbedSize)
 ntrk_cut = int(o.nTrackCut)
 
+ptbins = [20, 50, 80, 120, 200, 300, 500, 800]
+#ptbins = [20, 50, 100, 200, 500, 1000, 5000]
+if o.Version == "V65":
+	#ptbins = [100, 300, 500, 900, 1100, 1500, 2000, 3000]
+	ptbins = [20, 50, 100, 200, 500, 1000, 5000]
+
 SavedModels ={}
 
 class Models:
@@ -76,7 +83,8 @@ class Models:
 		self.label = label
 
 
-def LoadModel(filebase, testvec, label, simpleBuild=False ,loss = "binary_crossentropy"):
+def LoadModel(filebase, testvec, label, jetlabel,simpleBuild=False ,loss = "binary_crossentropy"):
+	
 	if simpleBuild:
 		model = model_from_json(open( filebase+'_architecture.json').read())
 		model.load_weights(filebase + '_model_weights.h5')
@@ -84,11 +92,15 @@ def LoadModel(filebase, testvec, label, simpleBuild=False ,loss = "binary_crosse
         #NOTE only for models coming from build_1hidden
 		#print "testvec shape", testvec.shape
 		n_cont_vars = 0
+		Variable = "dR"
+
 		if "dR" in filebase:
 			n_cont_vars = testvec[0].shape[2]
-		if "hits" in filebase:
+		if "hits" in filebase or "Hits" in filebase:
 			n_cont_vars = testvec.shape[1]
-		model = _buildModel_1hidden(n_cont_vars)
+			Variable = "Hits"
+
+		model = _buildModel_1hidden(n_cont_vars, Variable)
 		model.load_weights(filebase + '_model_weights.h5', by_name=True)
         
 	model.compile(loss =loss , optimizer= 'adam', metrics=["accuracy"])
@@ -96,6 +108,30 @@ def LoadModel(filebase, testvec, label, simpleBuild=False ,loss = "binary_crosse
 	pred = model.predict( testvec, batch_size)
 
 	if "4n" in filebase:
+#		HistOut = ROOT.TFile("4n.root", "recreate")
+#		Hist_pb_b = ROOT.TH1D("pb_b", "pb_b", 200, -1, 1)
+#		Hist_pb_l = ROOT.TH1D("pb_l", "pb_l", 200, -1, 1)
+#
+#		print "pred shape", pred[:,0].shape
+#		for ijet in range(1):
+#			print " jet pT ", jetlabel[ijet, 1]/1000.0
+#			print " jet tracks ", testvec[ijet]
+#			print " pb ", pred[ijet, 0], " pl ", pred[ijet, 2]
+#
+#			##if "Hits" in filebase:
+#			#	print " pb(hits) ", jetlabel[ijet, 14], " pl(hits) ", jetlabel[ijet, 13]
+#			#if "dR" in filebase:
+#			# print " pb(grade) ", jetlabel[ijet, 16], " pl(grade) ", jetlabel[ijet, 15]
+#
+#			if jetlabel[ijet, 0] == 5:
+#				Hist_pb_b.Fill( pred[ijet,0])
+#			if jetlabel[ijet, 0] == 0:
+#				Hist_pb_l.Fill( pred[ijet,0])
+#			
+#		HistOut.cd()
+#		Hist_pb_b.Write()
+#		Hist_pb_l.Write()
+
 		pred = np.log(pred[:,0]/(0.9*pred[:,2] + 0.1*pred[:,1]))
 	    
 	f = open(filebase+"_history.json", "r")
@@ -143,6 +179,11 @@ def makeData( Variables = "IP3D", max_len=max_len, padding= o.padding, nLSTMClas
 	labels_all = cPickle.load(f)
         #sv1_all = cPickle.load(f)
 
+	np.random.seed(10)
+	rand_index = np.random.permutation(trk_arr_all.shape[0])
+	trk_arr_all = trk_arr_all[rand_index]
+	labels_all = labels_all[rand_index]
+
 	f.close()
 
 	###########
@@ -159,7 +200,7 @@ def makeData( Variables = "IP3D", max_len=max_len, padding= o.padding, nLSTMClas
 		X = TTA.MakePaddedSequenceTensorFromListArray( trk_arr_all[:,0:3], doWhitening=False, maxlen=max_len, padding = padding)	
 
 	if Variables == "dR":
-		X = TTA.MakePaddedSequenceTensorFromListArray( trk_arr_all[:,0:4], doWhitening=False, maxlen=max_len, padding = padding)	
+		X = TTA.MakePaddedSequenceTensorFromListArray( trk_arr_all[:,[0,1,2,3]], doWhitening=False, maxlen=max_len, padding = padding)	
 
 	if Variables == "phi":
 		X = TTA.MakePaddedSequenceTensorFromListArray( trk_arr_all[:,0:5], doWhitening=False, maxlen=max_len, padding = padding)	
@@ -259,7 +300,7 @@ def makeData( Variables = "IP3D", max_len=max_len, padding= o.padding, nLSTMClas
 	weights = np.ones( X.shape[0])
 	if o.doJetpTReweight == "y":
 		
-		upbound = 700
+		upbound = 1000
 		step =10
 		if o.Version =="V56" or o.Version == "V52":
 			upbound = 2000
@@ -343,7 +384,7 @@ def makeData( Variables = "IP3D", max_len=max_len, padding= o.padding, nLSTMClas
 
 
 
-def _buildModel_1hidden(n_cont_vars):
+def _buildModel_1hidden(n_cont_vars, Variable):
         
 	_m = Masking( mask_value=0, input_shape = (max_len, n_cont_vars))
 	left = Sequential()
@@ -361,7 +402,7 @@ def _buildModel_1hidden(n_cont_vars):
 
 	model = Sequential()
 	
-	if o.Variables != "Hits":
+	if Variable != "Hits":
 		#model.add( Merge([left, right],mode='concat') )
 		model.add( Merge([_m, _e],mode='concat') )
 		#model.add(Lambda(MaskingHack, output_shape = MaskingHack_output_shape))
@@ -451,7 +492,7 @@ def buildModel_1hidden(dataset, useAdam=False):
 	##################
 	print "shape ", X_train_vec[0].shape,  X_train_vec[1].shape
 
-	model = _buildModel_1hidden( n_cont_vars = n_cont_vars )
+	model = _buildModel_1hidden( n_cont_vars = n_cont_vars, Variable = o.Variables )
 
 	# try using different optimizers and different optimizer configs
 	print "Compiling ..."
@@ -894,8 +935,8 @@ def compareROC():
 	dataset_dR = makeData( Variables = "dR", padding = "pre" , nLSTMClass=2)
 	dataset_Hits = makeData( Variables = "Hits", padding = "pre" , nLSTMClass=2)
 
-	dataset_dR_SL0 = makeData( Variables = "dR", padding = "pre" , nLSTMClass=2, TrackOrder = "SL0")
-	dataset_dR_pT = makeData( Variables = "dR", padding = "pre" , nLSTMClass=2, TrackOrder = "pT")
+	#dataset_dR_SL0 = makeData( Variables = "dR", padding = "pre" , nLSTMClass=2, TrackOrder = "SL0")
+	#dataset_dR_pT = makeData( Variables = "dR", padding = "pre" , nLSTMClass=2, TrackOrder = "pT")
 
 	############################
 	X_test_dR = dataset_dR['X_test']
@@ -906,16 +947,15 @@ def compareROC():
 	ntrk_test = labels_test_dR[:,7]
 	pt_test = labels_test_dR[:,1]
 
-	X_test_dR_SL0 = dataset_dR_SL0['X_test']
-	y_test_dR_SL0 = dataset_dR_SL0['y_test']
-	X_test_vec_dR_SL0     = [X_test_dR_SL0[:,:,0:4], X_test_dR_SL0[:,:,4]]
-	labels_test_dR_SL0 = dataset_dR_SL0['labels_test']
-
-	X_test_dR_pT = dataset_dR_pT['X_test']
-	y_test_dR_pT = dataset_dR_pT['y_test']
-	X_test_vec_dR_pT     = [X_test_dR_pT[:,:,0:4], X_test_dR_pT[:,:,4]]
-	labels_test_dR_pT = dataset_dR_pT['labels_test']
-
+#	X_test_dR_SL0 = dataset_dR_SL0['X_test']
+#	y_test_dR_SL0 = dataset_dR_SL0['y_test']
+#	X_test_vec_dR_SL0     = [X_test_dR_SL0[:,:,0:4], X_test_dR_SL0[:,:,4]]
+#	labels_test_dR_SL0 = dataset_dR_SL0['labels_test']
+#
+#	X_test_dR_pT = dataset_dR_pT['X_test']
+#	y_test_dR_pT = dataset_dR_pT['y_test']
+#	X_test_vec_dR_pT     = [X_test_dR_pT[:,:,0:4], X_test_dR_pT[:,:,4]]
+#	labels_test_dR_pT = dataset_dR_pT['labels_test']
 
 	X_test_vec_Hits = dataset_Hits['X_test']
 	y_test_Hits = dataset_Hits['y_test']
@@ -926,27 +966,32 @@ def compareROC():
 	SV1_test = labels_test_dR[:,9]
 	MV2_test = labels_test_dR[:,10]
 
-	#LoadModel("V51_LSTM_Hits_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix", X_test_vec_Hits, "LSTM 60E 4Class Hit Variables")
-	#LoadModel("V51_LSTM_Hits_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix_JetpTReweight", X_test_vec_Hits, "LSTM 60E 4Class Hit Variables pTReweight")
-	
-	#LoadModel("V51_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix", X_test_vec_dR, "Rel21 ttbar LSTM 60E 4Class")
-	#LoadModel("V51_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix_JetpTReweight", X_test_vec_dR, "Rel21 ttbar LSTM 60E 4Class pTReweight")
 
-	LoadModel("V56_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix", X_test_vec_dR, "Rel21 Z' LSTM 60E 4Class Sd0_{sig} order")
-	LoadModel("V56_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_SL0_CMix", X_test_vec_dR_SL0, "Rel21 Z' LSTM 60E 4Class SL0_{sig} order")
-	LoadModel("V56_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_SortpT_CMix", X_test_vec_dR_pT, "Rel21 Z' LSTM 60E 4Class p_{T} order")
+#	LoadModel("V56_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix", X_test_vec_dR, "Rel21 Z' LSTM 60E 4Class Sd0_{sig} order")
+#	LoadModel("V56_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_SL0_CMix", X_test_vec_dR_SL0, "Rel21 Z' LSTM 60E 4Class SL0_{sig} order")
+#	LoadModel("V56_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_SortpT_CMix", X_test_vec_dR_pT, "Rel21 Z' LSTM 60E 4Class p_{T} order")
+#
 
-	LoadModel("V56_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix_JetpTReweight", X_test_vec_dR, "Rel21 Z' LSTM 60E 4Class Sd0_{sig} order pTReweight")
-	LoadModel("V56_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_SL0_CMix_JetpTReweight", X_test_vec_dR_SL0, "Rel21 Z' LSTM 60E 4Class SL0_{sig} order pTReweight")
-	LoadModel("V56_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_SortpT_CMix_JetpTReweight", X_test_vec_dR_pT, "Rel21 Z' LSTM 60E 4Class pT order pTReweight")
+	#LoadModel("V65_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix_JetpTReweight", X_test_vec_dR, "Rel21 Hybrid training TrackGrade LSTM 60E 4Class p_{T} Reweight", labels_test_dR)
+	#LoadModel("V61_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix_JetpTReweight", X_test_vec_dR, "Rel21 ttbar training TrackGrade LSTM 60E 4Class p_{T} Reweight", labels_test_dR)
+	#LoadModel("V62_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix_JetpTReweight", X_test_vec_dR, "Rel21 Z' training TrackGrade LSTM 60E 4Class p_{T} Reweight")
+	#LoadModel("V65_LSTM_Hits_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix_JetpTReweight", X_test_vec_Hits, "Rel21 Hybrid training Hit Variables LSTM 60E 4Class p_{T} Reweight", labels_test_dR)
+
+	LoadModel("V72_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix_JetpTReweight", X_test_vec_dR, "Rel21 Hybrid training TrackGrade LSTM 60E 4Class p_{T} Reweight", labels_test_dR)
+	LoadModel("V72_LSTM_Hits_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix_JetpTReweight", X_test_vec_Hits, "Rel21 Hybrid training NHits LSTM 60E 4Class p_{T} Reweight", labels_test_dR)
 
 
 	def DrawROC(models, outputName, bkg="l"):
-		labels = ["IP3D", "SV1", "MV2C10"]
+		#labels = ["IP3D", "SV1", "MV2C10"]
+		labels = []
 
-		bscores = [ip3d_test[labels_test_dR[:,0]==5], SV1_test[labels_test_dR[:,0]==5], MV2_test[labels_test_dR[:,0]==5]]
-		lscores = [ip3d_test[labels_test_dR[:,0]==0], SV1_test[labels_test_dR[:,0]==0], MV2_test[labels_test_dR[:,0]==0]]
-		cscores = [ip3d_test[labels_test_dR[:,0]==4], SV1_test[labels_test_dR[:,0]==4], MV2_test[labels_test_dR[:,0]==4]]
+		#bscores = [ip3d_test[labels_test_dR[:,0]==5], SV1_test[labels_test_dR[:,0]==5], MV2_test[labels_test_dR[:,0]==5]]
+		#lscores = [ip3d_test[labels_test_dR[:,0]==0], SV1_test[labels_test_dR[:,0]==0], MV2_test[labels_test_dR[:,0]==0]]
+		#cscores = [ip3d_test[labels_test_dR[:,0]==4], SV1_test[labels_test_dR[:,0]==4], MV2_test[labels_test_dR[:,0]==4]]
+
+		bscores = []
+		lscores = []
+		cscores = []
 		
 		for m in models:
 			labels.append( m.label)
@@ -992,10 +1037,10 @@ def compareROC():
 
 
         def getScoreCutList(scoreList):
-		bins = 	[100, 300, 500, 900, 1100, 1500, 2000, 3000]
+		#bins = 	[100, 300, 500, 900, 1100, 1500, 2000, 3000]
                 return plottingUtils.getFixEffCurve(scoreList = scoreList,  varList = pt_test[labels_test_dR[:,0]==5]/1000.0,
 						    label = "IdontCare",
-						    bins = bins,
+						    bins = ptbins,
 						    fix_eff_target = 0.7,
 						    onlyReturnCutList = True
                                                     )
@@ -1003,7 +1048,7 @@ def compareROC():
 
         def DrawFlatEfficiencyCurves(models, outputName):
 		labels = ["IP3D", "SV1", "MV2C10"]
-		bins = 	[100, 300, 500, 900, 1100, 1500, 2000, 3000]
+		#bins = 	[100, 300, 500, 900, 1100, 1500, 2000, 3000]
 		varList = pt_test[labels_test_dR[:,0]==0]
 		varList = varList/1000.
 		
@@ -1035,7 +1080,7 @@ def compareROC():
 		for i in range(len(labels)):
 			approachList.append( (lscores[i], varList, ("EffCurvePt"+labels[i], labels[i]), getScoreCutList(bscores[i])) )
 
-                plottingUtils.MultipleFlatEffCurve( outputName,  approachList = approachList, bins = bins )
+                plottingUtils.MultipleFlatEffCurve( outputName,  approachList = approachList, bins = ptbins )
 
 	def DrawLEff_pT(  models, labels, pt):
 		approachList = [
@@ -1053,7 +1098,8 @@ def compareROC():
 		plottingUtils.MultipleRejCurve(
 			outputName = "LEffCurveCompare_pT.root", 
 			approachList = approachList,
-			bins = 	[100, 300, 500, 900, 1100, 1500, 2000, 3000],
+			#bins = 	[100, 300, 500, 900, 1100, 1500, 2000, 3000],
+			bins = 	ptbins,
 			eff_target = 0.7,)
 
 
@@ -1069,25 +1115,27 @@ def compareROC():
 		plottingUtils.MultipleEffCurve(                                 
 			outputName = "BEffCurveCompare_pT.root",   
 			approachList = approachList,
-			bins = 	[100, 300, 500, 900, 1100, 1500, 2000, 3000],
+			bins = 	ptbins, #[100, 300, 500, 900, 1100, 1500, 2000, 3000],
 			eff_target = 0.7,)
 
-#	Comp_Quick_4Class             = [SavedModels["V51_LSTM_Hits_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix"],
-#					 SavedModels["V51_LSTM_Hits_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix_JetpTReweight"]]
 
-	Comp_Quick_4Class = [SavedModels["V56_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix"],
-			     SavedModels["V56_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix_JetpTReweight"],
-			     SavedModels["V56_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_SL0_CMix"],
-			     SavedModels["V56_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_SL0_CMix_JetpTReweight"],
-			     SavedModels["V56_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_SortpT_CMix"],
-			     SavedModels["V56_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_SortpT_CMix_JetpTReweight"]]
+
+	Comp_Quick_4Class = [SavedModels["V72_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix_JetpTReweight"], 
+			     SavedModels["V72_LSTM_Hits_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix_JetpTReweight"]]
+
+	#Comp_Quick_4Class_Hits = [SavedModels["V65_LSTM_Hits_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix_JetpTReweight"],
+	#SavedModels["V61_LSTM_Hits_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix_JetpTReweight"],
+	#SavedModels["V62_LSTM_Hits_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix_JetpTReweight"]]
 
 	
 	DrawROC(Comp_Quick_4Class,         "BL_4Class_Layer.root", bkg="l")
 	DrawROC(Comp_Quick_4Class,         "BC_4Class_Layer.root", bkg="c")
-	DrawFlatEfficiencyCurves(Comp_Quick_4Class,   "RejAtFlatEff_4Class.root")
-	DrawLEff_pT(  Comp_Quick_4Class, labels_test_dR, pt_test)
-	DrawBEff_pT(  Comp_Quick_4Class, labels_test_dR, pt_test)
+
+	#DrawROC(Comp_Quick_4Class_Hits,         "BL_4Class_Layer_hits.root", bkg="l")
+	#DrawROC(Comp_Quick_4Class_Hits,         "BC_4Class_Layer_hits.root", bkg="c")
+	#DrawFlatEfficiencyCurves(Comp_Quick_4Class,   "RejAtFlatEff_4Class.root")
+	#DrawLEff_pT(  Comp_Quick_4Class, labels_test_dR, pt_test)
+	#DrawBEff_pT(  Comp_Quick_4Class, labels_test_dR, pt_test)
 
 	#DrawLEff_pT(  Comp_Quick_4Class, labels_test_dR, pt_test_Hits)
 	#DrawBEff_pT(  Comp_Quick_4Class, labels_test_dR, pt_test_Hits)
@@ -1114,7 +1162,6 @@ if __name__ == "__main__":
 			modelname += '_AddJetpT'
 		if int(o.EmbedSize) != 2:
 			modelname += "_" + o.EmbedSize+"EmbedSize"
-
 
 		if o.Mode == "R":
 			modelname = o.filebase+"_Retrain_"+o.nEpoch
