@@ -1,15 +1,19 @@
+import AtlasStyle as Atlas
 import ROOT
 import array
 import cPickle
 import json
 import numpy as np
+from LaurenColor import *
 
-colorlist = [2, 4, 8, 28, 93, 30, 38, 41, 42, 46, 47, 48, 49, 51, 52, 53, 54, 55, 56, 57, 58, 59]
+colorlist = colorind
 
 # signal should be in format [ array1, array2, array3 ], where each array represents one approach
 # Each array should be an array of scores per data, aligned with other arrays
-def getROC( signal, background, label, cut_start=None, cut_end=None, outputName="myROC.root", Rejection="l"):
+def getROC( signal, background, label, cut_start=None, cut_end=None, outputName="myROC.root", Rejection="l", omission = []):
 	ROCList = []
+	markerlist = [21, 8 , 22, 23]
+	print "get roc ", label
 	for ivar in range(len(signal)):
 		s_sort = np.sort( signal[ivar] )
 		b_sort = np.sort( background[ivar] )
@@ -48,6 +52,7 @@ def getROC( signal, background, label, cut_start=None, cut_end=None, outputName=
 		for i in range(1000):
 			cut = c_start + i*1.0*c_delta
 			s_eff.append( 1.0*np.count_nonzero( s_sort > cut ) / (1.0*len(s_sort))  )
+			
 			b_count = np.count_nonzero( b_sort > cut )
 			b_rej.append(  (1.0*len(b_sort)) / (1.0 if b_count==0 else (1.0*b_count))  )
 
@@ -65,27 +70,46 @@ def getROC( signal, background, label, cut_start=None, cut_end=None, outputName=
 	mg = ROOT.TMultiGraph()
 
 	legend = ROOT.TLegend(0.5, 0.5, 0.75, 0.75)
-	for i in range(len(ROCList)):
-		ROC = ROCList[i]
 
-		ROC.SetLineWidth(2)
+	for i in range(len(ROCList)):
+		if i in omission:
+			continue
+		ROC = ROCList[i]
+		ROC.SetLineWidth(3)
 		ROC.SetLineColor(colorlist[i])
 		ROC.SetMarkerColor(colorlist[i])
-
+		ROC.SetMarkerSize(0)
+		ROC.SetMarkerStyle(0)
+		ROC.SetLineStyle(i+1)
+		
 		mg.Add(ROC)
-		legend.AddEntry(ROC, label[i], "lp")
+		if omission == []:
+			legend.AddEntry(ROC, label[i], "lp")
+
 		f.WriteTObject(ROC, "ROC_"+label[i], "Overwrite")
 
+	if omission!=[]:
+		legend.AddEntry(ROCList[1], label[1], "lp")
+		legend.AddEntry(ROCList[4], label[4], "lp")
+		legend.AddEntry(ROCList[5], label[5], "lp")
+		legend.AddEntry(ROCList[2], label[2], "lp")
+		
+
 	mg.Draw("AL")
-	mg.GetXaxis().SetTitle("b-jet efficiency")
+	mg.GetXaxis().SetTitle("b-jet efficiency, #varepsilon_{b}")
 	if Rejection == "l":
-		mg.GetYaxis().SetTitle("l-jet rejection")
+		mg.GetYaxis().SetTitle("light-jet rejection, 1/#varepsilon_{l}")
 	if Rejection == "c":
-		mg.GetYaxis().SetTitle("c-jet rejection")
+		mg.GetYaxis().SetTitle("c-jet rejection, 1/#varepsilon_{c}")
 
-	legend.Draw()
+	legend.Draw("same")
+	Atlas.ATLASLabel(0.2, 0.88,0.13, "Simulation Internal",color=1)
+	Atlas.myText(0.2, 0.81 ,color=1, size=0.04,text="#sqrt{s}=13 TeV, t#bar{t}") 
+	Atlas.myText(0.2, 0.75 ,color=1, size=0.04,text="p_{T}>20 GeV, |#eta|<2.5") 
+	#Atlas.myText(0.2, 0.69 ,color=1, size=0.04,text="Rel21") 
 
-	canvas.Update()
+	#canvas.Update()
+	canvas.Draw()
 
 	f.WriteTObject(canvas, canvas.GetName(), "Overwrite")
 
@@ -262,6 +286,7 @@ def getFixEffCurve(scoreList, varList, label, bins, fix_eff_target, scoreCutList
         # get pt-dependent cut in order to reach a fixed efficiency for each pT bin                                                                                                                                                                                           
 	print 'varlist ', varList
 	print 'scorelist ', scoreList
+	print "ptbins", bins
 
         if scoreCutList is None:
                 scoreCutList = []
@@ -276,6 +301,8 @@ def getFixEffCurve(scoreList, varList, label, bins, fix_eff_target, scoreCutList
 		return scoreCutList
 
 	histName, displayLabel = label
+
+
 
 	h_base   = ROOT.TH1D(histName+"_beforeCut", histName+"_beforeCut", len(bins)-1, array.array('d', bins))
         h_base.Sumw2()
@@ -370,25 +397,29 @@ def ConvertEffToGraph(effplot, bins, doEff=True):
 		try :
 			eff.append(1./effplot.GetEfficiency(i+1))
 			efferror.append( (effplot.GetEfficiencyErrorLow(i+1)/effplot.GetEfficiency(i+1))/effplot.GetEfficiency(i+1) )
+			#efferror.append(0)
 		except ZeroDivisionError:
 			eff.append(0)
 			efferror.append( 0)
+
+    plotbins =  [35, 70, 120, 225, 400]
+    bins_width = [15, 20, 30, 75, 100]
 			
-    newgraph = ROOT.TGraphErrors (len(bins), array.array('d', bins), array.array('d', eff), array.array('d', [0]*len(bins)), array.array('d', efferror))
+    newgraph = ROOT.TGraphErrors (len(bins), array.array('d', plotbins), array.array('d', eff), array.array('d', bins_width), array.array('d', efferror))
     return newgraph
 
 
 # here approachList also includes scoreCutList, which should be consistent with bins                  
-def MultipleFlatEffCurve(outputName, approachList, bins):
-
-        fout = ROOT.TFile(outputName, "update")
+def MultipleFlatEffCurve(outputName, approachList, bins, binslong,flav = "L"):
+	markerlist = [21, 8 , 22, 23, 29, 34]
+        fout = ROOT.TFile(outputName, "recreate")
 	fout.cd()
 	Canv = ROOT.TCanvas("EffComb", "EffComb", 0, 800, 0, 800)
 	Canv.cd()
 
 	EffCurves = []
         for scoreList, varList, label, scoreCutList in approachList:
-                heff = getFixEffCurve(scoreList, varList, label, bins, fix_eff_target=0., scoreCutList=scoreCutList, onlyReturnCutList=False)
+                heff = getFixEffCurve(scoreList, varList, label, binslong, fix_eff_target=0.7, scoreCutList=scoreCutList, onlyReturnCutList=False)
 		EffCurves.append(heff)
 
 	legend = ROOT.TLegend(0.5, 0.5, 0.75, 0.75)
@@ -402,7 +433,9 @@ def MultipleFlatEffCurve(outputName, approachList, bins):
 		ROC.SetLineWidth(2)
 		ROC.SetLineColor(colorlist[i])
 		ROC.SetMarkerColor(colorlist[i])
-		ROC.SetMarkerStyle(1)
+		ROC.SetMarkerSize(1)
+		ROC.SetMarkerStyle(markerlist[i])
+		ROC.SetLineStyle(i+1)
     
 		mg.Add(ROC)
 		
@@ -410,10 +443,18 @@ def MultipleFlatEffCurve(outputName, approachList, bins):
 
 		ROCs.append(ROC)
 
-	mg.Draw("AL*")
+	mg.Draw("AP")
 	mg.GetXaxis().SetTitle("b-jet p_{T} [GeV]")
-	mg.GetYaxis().SetTitle("l-jet Rejection")
+	if flav == "L":
+		mg.GetYaxis().SetTitle("light-jet Rejection, 1/#varepsilon_{l}")
+	if flav == "C":
+		mg.GetYaxis().SetTitle("c-jet Rejection,  1/#varepsilon_{c}")
 	legend.Draw("same")
+	Atlas.ATLASLabel(0.2, 0.88,0.13, "Simulation Internal",color=1)
+	Atlas.myText(0.2, 0.81 ,color=1, size=0.04,text="#sqrt{s}=13 TeV, t#bar{t}") 
+	Atlas.myText(0.2, 0.75 ,color=1, size=0.04,text="p_{T}>20 GeV, |#eta|<2.5") 
+	Atlas.myText(0.2, 0.69 ,color=1, size=0.04,text="Flat 70% b-tagging WP") 
+
 	Canv.Write()
 
 	fout.Close()

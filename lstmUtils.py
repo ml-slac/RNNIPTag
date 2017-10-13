@@ -1,3 +1,5 @@
+import array
+import AtlasStyle as Atlas
 import TextToArray as TTA
 import plotting
 import matplotlib.pyplot as plt
@@ -7,7 +9,9 @@ import sys
 from copy import deepcopy
 import os
 import ROOT
+from LaurenColor import *
 
+from scipy.stats.stats import pearsonr
 from keras.preprocessing import sequence
 from keras.optimizers import SGD, RMSprop, Adagrad
 from keras.utils import np_utils
@@ -16,6 +20,7 @@ from keras.layers.core import Dense, Dropout, Activation, Merge, Flatten, TimeDi
 from keras.layers.embeddings import Embedding
 from keras.layers.recurrent import LSTM, GRU
 from keras.models import model_from_json
+import keras.backend as K
 
 from CustomFunctions import MaskingHack, MaskingHack_output_shape
 
@@ -23,6 +28,11 @@ import plottingUtils
 import json
 import random
 from optparse import OptionParser
+
+import theano
+import theano.tensor as T
+from theano import pp
+
 
 sys.setrecursionlimit(40000)
 
@@ -61,13 +71,19 @@ nb_epoch = int(o.nEpoch)
 max_len = int(o.nMaxTrack)
 batch_size = 128
 n_events = int(o.nEvents)
-trainFraction = 0.8
+trainFraction = 0.50
 max_embed_features = 16
 embed_size = int(o.EmbedSize)
 ntrk_cut = int(o.nTrackCut)
 
-ptbins = [20, 50, 80, 120, 200, 300, 500, 800]
+#ptbins = [20, 50, 80, 120, 200, 300, 500, 800]
+ptbins = [20, 50, 90, 150, 300]
+ptbins_long = [20, 50, 90, 150, 300, 1000]
+
+ptbins      = [20, 50, 90, 150, 300, 1000]
+ptbins_long = [20, 50, 90, 150, 300, 1000, 2000]
 #ptbins = [20, 50, 100, 200, 500, 1000, 5000]
+
 if o.Version == "V65":
 	#ptbins = [100, 300, 500, 900, 1100, 1500, 2000, 3000]
 	ptbins = [20, 50, 100, 200, 500, 1000, 5000]
@@ -75,79 +91,69 @@ if o.Version == "V65":
 SavedModels ={}
 
 class Models:
-	def __init__(self, filebase, pred, label, val_loss,   loss):
+	def __init__(self, filebase, pred, label, val_loss,   loss, model):
 		self.filebase = filebase
 		self.pred = pred
 		self.val_loss = val_loss
 		self.loss = loss
 		self.label = label
+		self.model = model
 
 
-def LoadModel(filebase, testvec, label, jetlabel,simpleBuild=False ,loss = "binary_crossentropy"):
+def LoadModel(filebase, testvec, label, jetlabel,simpleBuild=False ,loss = "categorical_crossentropy"):
 	
 	if simpleBuild:
 		model = model_from_json(open( filebase+'_architecture.json').read())
 		model.load_weights(filebase + '_model_weights.h5')
 	else:
-        #NOTE only for models coming from build_1hidden
-		#print "testvec shape", testvec.shape
 		n_cont_vars = 0
 		Variable = "dR"
 
 		if "dR" in filebase:
 			n_cont_vars = testvec[0].shape[2]
+		if "pTFrac" in filebase:
+			n_cont_vars = testvec[0].shape[2]
+		if "IP3D" in filebase:
+			n_cont_vars = testvec[0].shape[2]
+
 		if "hits" in filebase or "Hits" in filebase:
 			n_cont_vars = testvec.shape[1]
 			Variable = "Hits"
+		if "LLR" in filebase:
+			n_cont_vars = 1
+			Variable = "LLR"
 
-		model = _buildModel_1hidden(n_cont_vars, Variable)
+		node = int(o.nLSTMNodes)
+		if "LLR" in filebase:
+			node = 40
+
+		model = _buildModel_1hidden(n_cont_vars, Variable, node)
 		model.load_weights(filebase + '_model_weights.h5', by_name=True)
         
-	model.compile(loss =loss , optimizer= 'adam', metrics=["accuracy"])
+	model.compile(loss =loss , optimizer= "adam", metrics=["accuracy"])
     
 	pred = model.predict( testvec, batch_size)
 
 	if "4n" in filebase:
-#		HistOut = ROOT.TFile("4n.root", "recreate")
-#		Hist_pb_b = ROOT.TH1D("pb_b", "pb_b", 200, -1, 1)
-#		Hist_pb_l = ROOT.TH1D("pb_l", "pb_l", 200, -1, 1)
-#
-#		print "pred shape", pred[:,0].shape
-#		for ijet in range(1):
-#			print " jet pT ", jetlabel[ijet, 1]/1000.0
-#			print " jet tracks ", testvec[ijet]
-#			print " pb ", pred[ijet, 0], " pl ", pred[ijet, 2]
-#
-#			##if "Hits" in filebase:
-#			#	print " pb(hits) ", jetlabel[ijet, 14], " pl(hits) ", jetlabel[ijet, 13]
-#			#if "dR" in filebase:
-#			# print " pb(grade) ", jetlabel[ijet, 16], " pl(grade) ", jetlabel[ijet, 15]
-#
-#			if jetlabel[ijet, 0] == 5:
-#				Hist_pb_b.Fill( pred[ijet,0])
-#			if jetlabel[ijet, 0] == 0:
-#				Hist_pb_l.Fill( pred[ijet,0])
-#			
-#		HistOut.cd()
-#		Hist_pb_b.Write()
-#		Hist_pb_l.Write()
 
-		pred = np.log(pred[:,0]/(0.9*pred[:,2] + 0.1*pred[:,1]))
+		pred = np.log(pred[:,0]/(0.93*pred[:,2] + 0.07*pred[:,1]))
 	    
 	f = open(filebase+"_history.json", "r")
 	history = cPickle.load(f)
 	train_hist = history["loss"]
 	test_hist = history["val_loss"]
 
-	SavedModels[filebase] = Models(filebase, pred, label, test_hist, train_hist)
+	SavedModels[filebase] = Models(filebase, pred, label, test_hist, train_hist, model)
 
 
 def makeData( Variables = "IP3D", max_len=max_len, padding= o.padding, nLSTMClass = o.nLSTMClass, TrackOrder = o.TrackOrder): 
 	print "Getting Data ..."
 
-	folder_name = '/u/at/zihaoj/nfs2/RNNIPTag/MakeData/'
+	folder_name = '/u/at/zihaoj/nfs/RNNIPTag/MakeData/'
         
 	f = None
+	if TrackOrder == "Sd0" and Variables == "JF":
+		f = file(folder_name+'Dataset_JF_Giacinto.pkl','r')
 	if TrackOrder == "Sd0" and Variables == "phi":
 		f = file(folder_name+'Dataset_'+o.Version+'_IP3D_pTFrac_dphi_deta_5m.pkl','r')
 	if TrackOrder == "Sd0" and Variables == "dtheta":
@@ -155,8 +161,7 @@ def makeData( Variables = "IP3D", max_len=max_len, padding= o.padding, nLSTMClas
 	if TrackOrder == "Sd0" and Variables == "d0z0":
 		f = file(folder_name+'Dataset_'+o.Version+'_IP3D_pTFrac_d0_z0_5m.pkl','r')
 
-	if TrackOrder == "Sd0" and Variables == "dR":
-		#f = file(folder_name+'Dataset_'+o.Version+'_IP3D_pTFrac_dR_5m.pkl','r')
+	if TrackOrder == "Sd0" and (Variables == "dR" or Variables == "pTFrac" or Variables == "IP3D" or Variables == "LLR" ):
 		f = file(folder_name+'Dataset_'+o.Version+'_IP3D_pTFrac_dR_hits_3m.pkl', 'r')
 
 	if TrackOrder == "Sd0" and Variables == "Hits":
@@ -164,9 +169,6 @@ def makeData( Variables = "IP3D", max_len=max_len, padding= o.padding, nLSTMClas
 
 	if TrackOrder == "Reverse" and Variables == "dR":
 		f = file(folder_name+'Dataset_'+o.Version+'_IP3D_pTFrac_dR_reverse_sd0order_5m.pkl','r')
-
-	if TrackOrder == "Sd0" and Variables == "IP3D":
-		f = file(folder_name+'Dataset_'+o.Version+'_IP3D_pTFrac_dR_5m.pkl','r')
 
 	if TrackOrder == "SL0":
 		f = file(folder_name+'Dataset_'+o.Version+'_IP3D_pTFrac_dR_sl0order_hits_3m.pkl','r')
@@ -177,9 +179,11 @@ def makeData( Variables = "IP3D", max_len=max_len, padding= o.padding, nLSTMClas
 
         trk_arr_all = cPickle.load(f)
 	labels_all = cPickle.load(f)
-        #sv1_all = cPickle.load(f)
 
-	np.random.seed(10)
+	print trk_arr_all.shape
+	print labels_all.shape
+
+	#np.random.seed(10)
 	rand_index = np.random.permutation(trk_arr_all.shape[0])
 	trk_arr_all = trk_arr_all[rand_index]
 	labels_all = labels_all[rand_index]
@@ -202,6 +206,13 @@ def makeData( Variables = "IP3D", max_len=max_len, padding= o.padding, nLSTMClas
 	if Variables == "dR":
 		X = TTA.MakePaddedSequenceTensorFromListArray( trk_arr_all[:,[0,1,2,3]], doWhitening=False, maxlen=max_len, padding = padding)	
 
+	if Variables == "JF":
+		X = TTA.MakePaddedSequenceTensorFromListArray( trk_arr_all[:,[0,1,2,3,5,6,7,8,9,10,11,12]], doWhitening=False, maxlen=max_len, padding = padding)	
+		#X = TTA.MakePaddedSequenceTensorFromListArray( trk_arr_all[:,[0,1,2,3]], doWhitening=False, maxlen=max_len, padding = padding)	
+
+	if Variables == "LLR":
+		X = TTA.MakePaddedSequenceTensorFromListArray( trk_arr_all[:,[5]], doWhitening=False, maxlen=max_len, padding = padding)	
+
 	if Variables == "phi":
 		X = TTA.MakePaddedSequenceTensorFromListArray( trk_arr_all[:,0:5], doWhitening=False, maxlen=max_len, padding = padding)	
 
@@ -213,10 +224,11 @@ def makeData( Variables = "IP3D", max_len=max_len, padding= o.padding, nLSTMClas
 
 	if Variables == "Hits":
 		X = TTA.MakePaddedSequenceTensorFromListArray( trk_arr_all[:,[0, 1, 2, 3, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]], doWhitening=False, maxlen=max_len, padding = padding)	
+		
+	#trk_grd = TTA.convertSequencesFromListArray( trk_arr_all[:,5], dopad=True, pad_value=-1, maxlen=max_len )
+	trk_grd = None
 
-	trk_grd = TTA.convertSequencesFromListArray( trk_arr_all[:,5], dopad=True, pad_value=-1, maxlen=max_len )
-
-	if Variables == "dR" or Variables == "IP3D":
+	if Variables == "dR" or Variables == "pTFrac" or Variables == "IP3D" or Variables == "JF":
 		trk_grd = TTA.convertSequencesFromListArray( trk_arr_all[:,4], dopad=True, pad_value=-1, maxlen=max_len )
 
 	print "Getting Labels"
@@ -224,8 +236,19 @@ def makeData( Variables = "IP3D", max_len=max_len, padding= o.padding, nLSTMClas
 
 	if Variables == "Hits":
 		X_all = X
+		print "x shape", X_all.shape
+	elif Variables == "LLR":
+		for i in range(15):
+			X[ X[:, i]<-100, i ] =0
+
+		X_all = np.zeros( (X.shape[0], X.shape[1], 1) )
+		X_all[:, :, 0] = X
+
+		print "x shape", X_all.shape
+		print "max min", np.amax(X_all), np.amin(X_all)
 	else:
 		X_all = np.dstack( (X, trk_grd+1) )
+		print "x shape", X_all.shape
 		
 	X = X_all[:n_events]
 	labels = labels_all[:n_events]
@@ -252,40 +275,37 @@ def makeData( Variables = "IP3D", max_len=max_len, padding= o.padding, nLSTMClas
 		labels = labels[ labels[:,0]!=4]
 	
 	## apply jet sellection
-	# JVT >0.59 for jets with pT<60GeV and |eta|<2.4
-	JVTCuts =  np.logical_or(labels[:,11]>0.59 ,np.absolute(labels[:,2])>2.4)
-	JVTCuts =  np.logical_or(JVTCuts ,labels[:,1]>60000)
-	# Jet pT cuts > 20GeV
-	JetpTCut = labels[:,1]>20000
-	# Jet |eta|<2.5
-	JetEtaCut = np.absolute(labels[:,2])<2.5
-	# Jet alive after OR
-	JetEleVetoCut = (labels[:,12]==1)
+	if o.Variables != "JF":
+		# JVT >0.59 for jets with pT<60GeV and |eta|<2.4
+		JVTCuts =  np.logical_or(labels[:,11]>0.59 ,np.absolute(labels[:,2])>2.4)
+		JVTCuts =  np.logical_or(JVTCuts ,labels[:,1]>60000)
+		# Jet pT cuts > 20GeV
+		JetpTCut = labels[:,13]>20000
+		# Jet |eta|<2.5
+		JetEtaCut = np.absolute(labels[:,14])<2.5
+		# Jet alive after OR
+		JetEleVetoCut = (labels[:,12]==1)
 
-	JetCuts = np.logical_and(JVTCuts, JetpTCut)
-	JetCuts = np.logical_and(JetCuts, JetEtaCut)
-	JetCuts = np.logical_and(JetCuts, JetEleVetoCut)
+		JetCuts = np.logical_and(JVTCuts, JetpTCut)
+		JetCuts = np.logical_and(JetCuts, JetEtaCut)
+		JetCuts = np.logical_and(JetCuts, JetEleVetoCut)
 
-	X = X[ JetCuts]
-	y = y[ JetCuts]
-	labels = labels[JetCuts] 
-	#sv1 = sv1[JetCuts]
+		X = X[ JetCuts]
+		y = y[ JetCuts]
+		labels = labels[JetCuts] 
 
 	if o.doLessC == "y":
 		X_firsthalf = X[0:int(n_events/2.0)]
 		y_firsthalf = y[0:int(n_events/2.0)]
 		labels_firsthalf  = labels[0:int(n_events/2.0)]
-		#sv1_firsthalf     = sv1[0:int(n_events/2.0)]
 
 		X_second = X[int(n_events/2.0):n_events]
 		y_second = y[int(n_events/2.0):n_events]
 		labels_second  = labels[int(n_events/2.0):n_events]
-		#sv1_second     = sv1[int(n_events/2.0):n_events]
 
 		X_second = X_second[labels_second[:,0]!=4]
 		y_second = y_second[labels_second[:,0]!=4]
 		labels_second  = labels_second[labels_second[:,0]!=4]
-		#sv1_second     = sv1_second[labels_second[:,0]!=4]
 
 		X = np.vstack((X_firsthalf, X_second))
 
@@ -294,7 +314,6 @@ def makeData( Variables = "IP3D", max_len=max_len, padding= o.padding, nLSTMClas
 			y = np.vstack((y_firsthalf, y_second))
 		else :
 			y = (labels[:,0]==5)
-		#sv1 = np.vstack((sv1_firsthalf, sv1_second))
 
 
 	weights = np.ones( X.shape[0])
@@ -345,15 +364,8 @@ def makeData( Variables = "IP3D", max_len=max_len, padding= o.padding, nLSTMClas
 			if labels[ijet,0] ==4:
 				weights[ijet] = weight_c[pt_bin[ijet]]
 
-		print labels[:,0]
-		print pt
-		print weights
-		print weight_b
-		print weight_c
-		
 		
 	X_train, X_test = np.split( X, [ int(trainFraction*X.shape[0]) ] )
-	#sv1_train, sv1_test = np.split ( sv1, [ int(trainFraction*sv1.shape[0]) ] )
 	y_train, y_test = np.split( y, [ int(trainFraction*y.shape[0]) ] )
 	labels_train, labels_test = np.split( labels, [ int(trainFraction*labels.shape[0]) ] )
 	weights_train, weights_test = np.split( weights, [ int(trainFraction*labels.shape[0]) ] )
@@ -361,15 +373,13 @@ def makeData( Variables = "IP3D", max_len=max_len, padding= o.padding, nLSTMClas
 
 
 	print("data shape",X.shape)
+	print X
 	print y_train.shape, y_test.shape
-
 
 	dataset = {
 	  "X": X,
 	  "X_train": X_train,
 	  "X_test": X_test,
-	  #"sv1_train": sv1_train,
-	  #"sv1_test": sv1_test,
 	  "labels": labels,
 	  "labels_train": labels_train,
 	  "labels_test": labels_test,
@@ -383,41 +393,32 @@ def makeData( Variables = "IP3D", max_len=max_len, padding= o.padding, nLSTMClas
 	return dataset
 
 
-
-def _buildModel_1hidden(n_cont_vars, Variable):
+def _buildModel_1hidden(n_cont_vars, Variable, node):
         
 	_m = Masking( mask_value=0, input_shape = (max_len, n_cont_vars))
 	left = Sequential()
 	left.add(_m)
-	#left.add( Activation('linear', input_shape=(max_len, n_cont_vars)) )
-	#left.add( Masking( mask_value=0, input_shape = (max_len, n_cont_vars) ))
-	#left.add( TimeDistributedPassThrough( input_shape=(max_len, n_cont_vars) ) )
 
 	_e = Embedding(max_embed_features, embed_size, mask_zero=True, input_length=max_len, name="embedding_1")
 	right = Sequential()
 	right.add(_e)
-	#right.add(Embedding(max_embed_features, embed_size, mask_zero=True, input_length=max_len))
-	#right.add(Embedding(max_embed_features, embed_size, mask_zero=False, input_length=max_len))
 
 
 	model = Sequential()
 	
-	if Variable != "Hits":
-		#model.add( Merge([left, right],mode='concat') )
+	if Variable != "Hits" and Variable != "LLR":
 		model.add( Merge([_m, _e],mode='concat') )
-		#model.add(Lambda(MaskingHack, output_shape = MaskingHack_output_shape))
+	elif Variable == "LLR":
+		model.add( Masking( mask_value=0, input_shape = (max_len, 1) ) )
 	else:
-		model.add( Masking( mask_value=0, input_shape = (max_len, n_cont_vars))  )
-		#model.add(Lambda(MaskingHack, output_shape = MaskingHack_output_shape))
+		model.add( Masking( mask_value=0, input_shape = (max_len, n_cont_vars)))
 		
-	#model.add( Masking( mask_value=0.) )
-
 
 	if "LSTM" in o.Model:
 
-		lstm_layer = LSTM( int(o.nLSTMNodes), return_sequences=False, name="lstm_1")
-		lstm_layer_return_sequence = LSTM( int(o.nLSTMNodes), return_sequences=True, name="lstm_2")
-
+		lstm_layer = LSTM( int(node), return_sequences=False, name="lstm_1")
+		lstm_layer_return_sequence = LSTM( int(node), return_sequences=True, name="lstm_2")
+		
 		if o.nLayers == "1":
 			model.add(lstm_layer)
 			model.add(Dropout(0.2))
@@ -435,8 +436,8 @@ def _buildModel_1hidden(n_cont_vars, Variable):
 
 	if "GRU" in o.Model:
 
-		gru_layer = GRU( int(o.nLSTMNodes), return_sequences=False,name="gru_1")
-		gru_layer_return_sequence = GRU( int(o.nLSTMNodes), return_sequences=True,name="gru_2")
+		gru_layer = GRU( int(node), return_sequences=False,name="gru_1")
+		gru_layer_return_sequence = GRU( int(node), return_sequences=True,name="gru_2")
 
 		if o.nLayers == "1":
 			model.add(gru_layer)
@@ -477,13 +478,17 @@ def buildModel_1hidden(dataset, useAdam=False):
 
 	sample_weight = dataset['weights_train']
 
-	# split by "continuous variable" and "categorization variable"
-	X_train_vec = [X_train[:,:,0:-1],  X_train[:,:,-1] ]
-	if o.Variables == "Hits":
+	X_train_vec = None
+	if o.Variables != "LLR":
+		X_train_vec = [X_train[:,:,0:-1],  X_train[:,:,-1] ]
+
+	if o.Variables == "Hits" or o.Variables == "LLR":
 		X_train_vec = X_train
 
-	if o.Variables == "Hits":
+	if o.Variables == "Hits" :
 		n_cont_vars = X_train_vec.shape[2]
+	elif o.Variables == "LLR":
+		n_cont_vars = 1
 	else:
 		n_cont_vars = X_train_vec[0].shape[2]
 
@@ -492,15 +497,15 @@ def buildModel_1hidden(dataset, useAdam=False):
 	##################
 	print "shape ", X_train_vec[0].shape,  X_train_vec[1].shape
 
-	model = _buildModel_1hidden( n_cont_vars = n_cont_vars, Variable = o.Variables )
+	model = _buildModel_1hidden( n_cont_vars = n_cont_vars, Variable = o.Variables, node = o.nLSTMNodes)
 
 	# try using different optimizers and different optimizer configs
 	print "Compiling ..."
 	if useAdam:
 		if int(o.nLSTMClass)==2:
-			model.compile(loss='binary_crossentropy', optimizer='adam', metrics=["accuracy"])
+			model.compile(loss='binary_crossentropy', optimizer="adam", metrics=["accuracy"])
 		else:
-			model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=["accuracy"])
+			model.compile(loss='categorical_crossentropy', optimizer="adam", metrics=["accuracy"])
 	else:
 		if int(o.nLSTMClass)==2:
 			model.compile(loss='binary_crossentropy', optimizer='rmsprop', metrics=["accuracy"])
@@ -520,6 +525,8 @@ def buildModel_1hidden(dataset, useAdam=False):
 			model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=["accuracy"])
 
 	history = model.fit( X_train_vec , y_train, batch_size=batch_size, nb_epoch=nb_epoch, validation_split=0.1, shuffle = True, sample_weight= sample_weight)
+	
+
 	print "Finish Training"
 
 	return (model, history)
@@ -808,7 +815,7 @@ def evalModel(dataset, model, modelname):
 
 	# split by "continuous variable" and "categorization variable"
 	X_test_vec  = [X_test[:,:,0:-1],   X_test[:,:, -1]]
-	if o.Variables == "Hits":
+	if o.Variables == "Hits" or o.Variables == "LLR":
 		X_test_vec  = X_test
 
 	if o.Model == "DenseIP3D":
@@ -877,6 +884,14 @@ def evalModel(dataset, model, modelname):
 	pred = model.predict(X_test_vec, batch_size=batch_size)
 	return model
 
+def EvaluateJacobian(model):
+	#theano.function( [model.layers[0].input], T.jacobian(model.layers[-1].output.flatten(), model.layers[0].input) )
+
+
+	X = K.placeholder(shape=(15,15)) #specify the right placeholder
+	Y = K.sum(K.square(X)) # loss function
+	fn = K.function([X], K.gradients(Y, [X])) #function to call the gradient
+
 
 def BuildModel():
 
@@ -890,7 +905,7 @@ def BuildModel():
 	modelname = "" 
 	print o.Model
 	if "LSTM" in o.Model or "GRU" in o.Model:
-		model, history = buildModel_1hidden(dataset, True)
+		model, history = buildModel_1hidden(dataset,True)
 	if o.Model == "RNNSV1":
 		model, history = buildModel_RNNSV1(dataset, True)
 	if o.Model == "DenseIP3D":
@@ -899,7 +914,6 @@ def BuildModel():
 	print o.Model
 	if o.Model == "RNNPlusMV2" or o.Model == "RNNPlusSV1":
 		model, history = buildModel_RNNPlus(dataset, useAdam=True)
-
 
 	modelname = o.Version +"_" + o.Model + "_"+ o.Variables + "_" + o.nEpoch + "epoch_" + str( n_events/1000) + 'kEvts_' + str( o.nTrackCut) + 'nTrackCut_' +  o.nMaxTrack + "nMaxTrack_" + o.nLSTMClass +"nLSTMClass_" + o.nLSTMNodes +"nLSTMNodes_"+ o.nLayers + "nLayers"
 
@@ -933,39 +947,39 @@ def BuildModel():
 def compareROC():
 
 	dataset_dR = makeData( Variables = "dR", padding = "pre" , nLSTMClass=2)
-	dataset_Hits = makeData( Variables = "Hits", padding = "pre" , nLSTMClass=2)
+	#dataset_LLR = makeData( Variables = "LLR", padding = "pre" , nLSTMClass=2)
+	#dataset_pTFrac = makeData( Variables = "pTFrac", padding = "pre" , nLSTMClass=2)
+	#dataset_IP3D = makeData( Variables = "IP3D", padding = "pre" , nLSTMClass=2)
 
-	#dataset_dR_SL0 = makeData( Variables = "dR", padding = "pre" , nLSTMClass=2, TrackOrder = "SL0")
-	#dataset_dR_pT = makeData( Variables = "dR", padding = "pre" , nLSTMClass=2, TrackOrder = "pT")
+	#dataset_dR_post = makeData( Variables = "dR", padding = "post" , nLSTMClass=2)
+	#x_test_dR_post = dataset_dR_post['X_test']
 
 	############################
 	X_test_dR = dataset_dR['X_test']
 	y_test_dR = dataset_dR['y_test']
 	X_test_vec_dR     = [X_test_dR[:,:,0:4], X_test_dR[:,:,4]]
-	
+
+	#X_test_vec_LLR = dataset_LLR['X_test']
+
+	X_test_pTFrac = dataset_dR['X_test']
+	X_test_vec_pTFrac   = [X_test_dR[:,:,0:3], X_test_dR[:,:,4]]
+
+	X_test_IP3D = dataset_dR['X_test']
+	X_test_vec_IP3D   = [X_test_dR[:,:,0:2], X_test_dR[:,:,4]]
+
 	labels_test_dR = dataset_dR['labels_test']
 	ntrk_test = labels_test_dR[:,7]
-	pt_test = labels_test_dR[:,1]
+	pt_test = labels_test_dR[:,13]
+	#pt_test = labels_test_dR[:,1]
 
-#	X_test_dR_SL0 = dataset_dR_SL0['X_test']
-#	y_test_dR_SL0 = dataset_dR_SL0['y_test']
-#	X_test_vec_dR_SL0     = [X_test_dR_SL0[:,:,0:4], X_test_dR_SL0[:,:,4]]
-#	labels_test_dR_SL0 = dataset_dR_SL0['labels_test']
+#	X_test_vec_Hits = dataset_Hits['X_test']
+#	y_test_Hits = dataset_Hits['y_test']
+#	labels_test_Hits = dataset_Hits['labels_test']
+#	pt_test_Hits = labels_test_Hits[:,1]
 #
-#	X_test_dR_pT = dataset_dR_pT['X_test']
-#	y_test_dR_pT = dataset_dR_pT['y_test']
-#	X_test_vec_dR_pT     = [X_test_dR_pT[:,:,0:4], X_test_dR_pT[:,:,4]]
-#	labels_test_dR_pT = dataset_dR_pT['labels_test']
-
-	X_test_vec_Hits = dataset_Hits['X_test']
-	y_test_Hits = dataset_Hits['y_test']
-	labels_test_Hits = dataset_Hits['labels_test']
-	pt_test_Hits = labels_test_Hits[:,1]
-
         ip3d_test = labels_test_dR[:,3]
 	SV1_test = labels_test_dR[:,9]
 	MV2_test = labels_test_dR[:,10]
-
 
 #	LoadModel("V56_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix", X_test_vec_dR, "Rel21 Z' LSTM 60E 4Class Sd0_{sig} order")
 #	LoadModel("V56_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_SL0_CMix", X_test_vec_dR_SL0, "Rel21 Z' LSTM 60E 4Class SL0_{sig} order")
@@ -977,22 +991,37 @@ def compareROC():
 	#LoadModel("V62_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix_JetpTReweight", X_test_vec_dR, "Rel21 Z' training TrackGrade LSTM 60E 4Class p_{T} Reweight")
 	#LoadModel("V65_LSTM_Hits_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix_JetpTReweight", X_test_vec_Hits, "Rel21 Hybrid training Hit Variables LSTM 60E 4Class p_{T} Reweight", labels_test_dR)
 
-	LoadModel("V72_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix_JetpTReweight", X_test_vec_dR, "Rel21 Hybrid training TrackGrade LSTM 60E 4Class p_{T} Reweight", labels_test_dR)
-	LoadModel("V72_LSTM_Hits_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix_JetpTReweight", X_test_vec_Hits, "Rel21 Hybrid training NHits LSTM 60E 4Class p_{T} Reweight", labels_test_dR)
+	#LoadModel("V72_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix_JetpTReweight", X_test_vec_dR, "Rel21 Hybrid training TrackGrade LSTM 60E 4Class p_{T} Reweight", labels_test_dR)
+	#LoadModel("V72_LSTM_Hits_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix_JetpTReweight", X_test_vec_Hits, "Rel21 Hybrid training NHits LSTM 60E 4Class p_{T} Reweight", labels_test_dR)
+
+#	LoadModel("V72_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix_JetpTReweight", X_test_vec_dR, "V72 cut on uncalibrated quantities", labels_test_dR)
+
+#	LoadModel("V73_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix_JetpTReweight", X_test_vec_dR, "V73 cut on calibrated quantities", labels_test_dR)
+	LoadModel("V73_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix_JetpTReweight", X_test_vec_dR, "RNNIP", labels_test_dR)
+
+
+	#LoadModel("V47_LSTM_dR_50epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix_JetpTReweight", X_test_vec_dR, "RNNIP", labels_test_dR)
+
+	#LoadModel("V47_LSTM_dR_50epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix_JetpTReweight", X_test_vec_dR, "RNNIP(S_{d0}, S_{z0}, category, p_{T} Frac, #DeltaR)", labels_test_dR)
+#	LoadModel("V47_LSTM_pTFrac_50epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix_JetpTReweight", X_test_vec_pTFrac, "RNNIP(S_{d0}, S_{z0}, category, p_{T} Frac)", labels_test_dR)
+#	LoadModel("V47_LSTM_IP3D_50epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix_JetpTReweight", X_test_vec_IP3D, "RNNIP(S_{d0}, S_{z0}, category)", labels_test_dR)
+
+
+#	LoadModel("V47_LSTM_LLR_20epoch_2000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_40nLSTMNodes_1nLayers_CMix_JetpTReweight", X_test_vec_LLR, "RNNIP(LLR)", labels_test_dR)
 
 
 	def DrawROC(models, outputName, bkg="l"):
-		#labels = ["IP3D", "SV1", "MV2C10"]
-		labels = []
+		labels = ["IP3D"]
 
-		#bscores = [ip3d_test[labels_test_dR[:,0]==5], SV1_test[labels_test_dR[:,0]==5], MV2_test[labels_test_dR[:,0]==5]]
-		#lscores = [ip3d_test[labels_test_dR[:,0]==0], SV1_test[labels_test_dR[:,0]==0], MV2_test[labels_test_dR[:,0]==0]]
-		#cscores = [ip3d_test[labels_test_dR[:,0]==4], SV1_test[labels_test_dR[:,0]==4], MV2_test[labels_test_dR[:,0]==4]]
+		bscores = [ip3d_test[labels_test_dR[:,0]==5]]
+		lscores = [ip3d_test[labels_test_dR[:,0]==0]]
+		cscores = [ip3d_test[labels_test_dR[:,0]==4]]
 
-		bscores = []
-		lscores = []
-		cscores = []
-		
+		#bscores = []
+		#lscores = []
+		#cscores = []
+
+		print labels
 		for m in models:
 			labels.append( m.label)
 			if "Hits" not in m.filebase:
@@ -1015,11 +1044,24 @@ def compareROC():
 					cscores.append( m.pred[labels_test_Hits[:,0]==4] )
 					lscores.append( m.pred[labels_test_Hits[:,0]==0] )
 
-		if bkg =="l":
-			plottingUtils.getROC( bscores, lscores, labels, outputName=outputName, Rejection=bkg)
-		if bkg =="c":
-			plottingUtils.getROC( bscores, cscores, labels, outputName=outputName, Rejection=bkg)
+		## reorder
+#		bscores[0], bscores[1], bscores[2], bscores[3] = bscores[2], bscores[3], bscores[0], bscores[1]
+#		cscores[0], cscores[1], cscores[2], cscores[3] = cscores[2], cscores[3], cscores[0], cscores[1]
+#		lscores[0], lscores[1], lscores[2], lscores[3] = lscores[2], lscores[3], lscores[0], lscores[1]
+#		labels[0], labels[1], labels[2], labels[3] = labels[2], labels[3], labels[0], labels[1]
 
+		bscores[0], bscores[1] = bscores[1], bscores[0]
+		cscores[0], cscores[1] = cscores[1], cscores[0]
+		lscores[0], lscores[1] = lscores[1], lscores[0]
+		labels[0], labels[1] = labels[1], labels[0]
+
+		if bkg =="l":
+			print labels
+			#plottingUtils.getROC( bscores, lscores, labels, outputName=outputName, Rejection=bkg, omission = [0,3] )
+			plottingUtils.getROC( bscores, lscores, labels, outputName=outputName, Rejection=bkg, omission = [] )
+		if bkg =="c":
+			#plottingUtils.getROC( bscores, cscores, labels, outputName=outputName, Rejection=bkg, omission = [0,3] )
+			plottingUtils.getROC( bscores, cscores, labels, outputName=outputName, Rejection=bkg, omission = [] )
 
 	def DrawLoss(models, outputName):
 		train_loss = []
@@ -1036,24 +1078,31 @@ def compareROC():
 		plottingUtils.getTrainingCurve( train_loss + val_loss,  labels_train + labels_val, outputName=outputName)
 
 
-        def getScoreCutList(scoreList):
+        def getScoreCutList(scoreList, bins=ptbins):
 		#bins = 	[100, 300, 500, 900, 1100, 1500, 2000, 3000]
                 return plottingUtils.getFixEffCurve(scoreList = scoreList,  varList = pt_test[labels_test_dR[:,0]==5]/1000.0,
 						    label = "IdontCare",
-						    bins = ptbins,
+						    bins = bins,
 						    fix_eff_target = 0.7,
 						    onlyReturnCutList = True
                                                     )
 
 
-        def DrawFlatEfficiencyCurves(models, outputName):
-		labels = ["IP3D", "SV1", "MV2C10"]
+        def DrawFlatEfficiencyCurves(models, outputName, flav ="L"):
+		labels = ["IP3D"]#, "SV1", "MV2c10"]
+		#labels = []
 		#bins = 	[100, 300, 500, 900, 1100, 1500, 2000, 3000]
 		varList = pt_test[labels_test_dR[:,0]==0]
 		varList = varList/1000.
 		
-		bscores = [ip3d_test[labels_test_dR[:,0]==5], SV1_test[labels_test_dR[:,0]==5], MV2_test[labels_test_dR[:,0]==5]]
-		lscores = [ip3d_test[labels_test_dR[:,0]==0], SV1_test[labels_test_dR[:,0]==0], MV2_test[labels_test_dR[:,0]==0]]
+		bscores = [ip3d_test[labels_test_dR[:,0]==5]]
+		lscores = [ip3d_test[labels_test_dR[:,0]==0]]
+		cscores = [ip3d_test[labels_test_dR[:,0]==4]]
+
+		#bscores = []
+		#lscores = []
+		#cscores = []
+		
 
 		for m in models:
 			labels.append( m.label)
@@ -1061,26 +1110,45 @@ def compareROC():
 
 				try :
 					bscores.append( m.pred[labels_test_Hits[:,0]==5, 0] )
+					cscores.append( m.pred[labels_test_Hits[:,0]==4, 0] )
 					lscores.append( m.pred[labels_test_Hits[:,0]==0, 0] )
+					
 				except IndexError:
 					bscores.append( m.pred[labels_test_Hits[:,0]==5] )
+					cscores.append( m.pred[labels_test_Hits[:,0]==4] )
 					lscores.append( m.pred[labels_test_Hits[:,0]==0] )
 				continue
-
 				
 			try :
 				bscores.append( m.pred[labels_test_dR[:,0]==5, 0] )
+				cscores.append( m.pred[labels_test_dR[:,0]==4, 0] )
 				lscores.append( m.pred[labels_test_dR[:,0]==0, 0] )
 			except IndexError:
 				bscores.append( m.pred[labels_test_dR[:,0]==5] )
+				cscores.append( m.pred[labels_test_dR[:,0]==4] )
 				lscores.append( m.pred[labels_test_dR[:,0]==0] )
-				
+
+
+		#bscores[0], bscores[1], bscores[2], bscores[3] = bscores[2], bscores[3], bscores[0], bscores[1]
+		#cscores[0], cscores[1], cscores[2], cscores[3] = cscores[2], cscores[3], cscores[0], cscores[1]
+		#lscores[0], lscores[1], lscores[2], lscores[3] = lscores[2], lscores[3], lscores[0], lscores[1]
+		#labels[0], labels[1], labels[2], labels[3] = labels[2], labels[3], labels[0], labels[1]
+
+		bscores[0], bscores[1] = bscores[1], bscores[0]
+		cscores[0], cscores[1] = cscores[1], cscores[0]
+		lscores[0], lscores[1] = lscores[1], lscores[0]
+		labels[0], labels[1] = labels[1], labels[0]
+
 
 		approachList = []
 		for i in range(len(labels)):
-			approachList.append( (lscores[i], varList, ("EffCurvePt"+labels[i], labels[i]), getScoreCutList(bscores[i])) )
+			if flav == "L":
+				approachList.append( (lscores[i], varList, ("EffCurvePt"+labels[i], labels[i]), getScoreCutList(bscores[i], ptbins_long)) )
+			if flav == "C":
+				approachList.append( (cscores[i], varList, ("EffCurvePt"+labels[i], labels[i]), getScoreCutList(bscores[i], ptbins_long)) )
 
-                plottingUtils.MultipleFlatEffCurve( outputName,  approachList = approachList, bins = ptbins )
+                plottingUtils.MultipleFlatEffCurve( outputName,  approachList = approachList, bins = ptbins, binslong= ptbins_long, flav=flav )
+
 
 	def DrawLEff_pT(  models, labels, pt):
 		approachList = [
@@ -1097,6 +1165,26 @@ def compareROC():
 			
 		plottingUtils.MultipleRejCurve(
 			outputName = "LEffCurveCompare_pT.root", 
+			approachList = approachList,
+			#bins = 	[100, 300, 500, 900, 1100, 1500, 2000, 3000],
+			bins = 	ptbins,
+			eff_target = 0.7,)
+
+	def DrawCEff_pT(  models, labels, pt):
+		approachList = [
+			(ip3d_test[labels_test_dR[:,0]==5], pt_test[labels_test_dR[:,0]==5]/1000., 
+			 ip3d_test[labels_test_dR[:,0]==4], pt_test[labels_test_dR[:,0]==4]/1000., ("EffCurve_IP3D", "IP3D Signal Efficiency")),
+			(SV1_test[labels_test_dR[:,0]==5], pt_test[labels_test_dR[:,0]==5]/1000.,
+			 SV1_test[labels_test_dR[:,0]==4], pt_test[labels_test_dR[:,0]==4]/1000., ("EffCurve_SV1", "SV1 Signal Efficiency")),                                         
+			(MV2_test[labels_test_dR[:,0]==5], pt_test[labels_test_dR[:,0]==5]/1000.,
+			 MV2_test[labels_test_dR[:,0]==4], pt_test[labels_test_dR[:,0]==4]/1000., ("EffCurve_MV2", "MV2 Signal Efficiency"))]
+
+		for m in models:
+			approachList.append( (m.pred[labels[:,0]==5], pt[ labels[:,0]==5]/1000.,
+					      m.pred[labels[:,0]==4], pt[ labels[:,0]==4]/1000., ("EffCurve_"+m.label, m.label+" Efficiency")) )
+			
+		plottingUtils.MultipleRejCurve(
+			outputName = "CEffCurveCompare_pT.root", 
 			approachList = approachList,
 			#bins = 	[100, 300, 500, 900, 1100, 1500, 2000, 3000],
 			bins = 	ptbins,
@@ -1119,28 +1207,116 @@ def compareROC():
 			eff_target = 0.7,)
 
 
+	def DrawCorrelation(var, labels, model, varname):
 
-	Comp_Quick_4Class = [SavedModels["V72_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix_JetpTReweight"], 
-			     SavedModels["V72_LSTM_Hits_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix_JetpTReweight"]]
+		f = ROOT.TFile("corr_"+varname+".root", "recreate")
 
-	#Comp_Quick_4Class_Hits = [SavedModels["V65_LSTM_Hits_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix_JetpTReweight"],
-	#SavedModels["V61_LSTM_Hits_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix_JetpTReweight"],
-	#SavedModels["V62_LSTM_Hits_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix_JetpTReweight"]]
+		#b_hist = ROOT.TH1D("corr_score_b_"+varname, "corr_score_b_"+varname, 15, 0.5, 15.5)
+		#c_hist = ROOT.TH1D("corr_score_c_"+varname, "corr_score_c_"+varname, 15, 0.5, 15.5)
+		#l_hist = ROOT.TH1D("corr_score_l_"+varname, "corr_score_l_"+varname, 15, 0.5, 15.5)#
 
+		bjet_var = var[ labels[:,0]==5]
+		cjet_var = var[ labels[:,0]==4]
+		ljet_var = var[ labels[:,0]==0]
+
+		bjet_score = model.pred[labels[:,0]==5]
+		cjet_score = model.pred[labels[:,0]==4]
+		ljet_score = model.pred[labels[:,0]==0]
+		
+		def loop(var, score):
+			print var.shape
+			print score.shape
+			itrk_list = []
+			corr_list = []
+
+			for itrk in range(15):
+				var_thistrk = []
+				score_thistrk = []
+
+				score_thistrk = score[ var[:, itrk] !=0 ]
+				var_thistrk = var[ var[:, itrk] !=0, itrk]
+
+				#hist.SetBinContent(itrk+1, pearsonr(var_thistrk, score_thistrk)[0]   )
+
+				print pearsonr(var_thistrk, score_thistrk)[0] 
+				itrk_list.append(itrk+1)
+				corr_list.append(pearsonr(var_thistrk, score_thistrk)[0] )
+			return ROOT.TGraph(15, array.array('d', itrk_list), array.array('d', corr_list))
+
+		b_hist=  loop(bjet_var, bjet_score)
+		c_hist = loop(cjet_var, cjet_score)
+		l_hist = loop(ljet_var, ljet_score)
+		f.cd()
+
+		canvas = ROOT.TCanvas(varname, varname, 800, 600)
+		canvas.cd()
+
+		b_hist.SetLineColor( colorind[0])
+		b_hist.SetMarkerColor( colorind[0])
+		b_hist.SetMarkerStyle(20)
+		b_hist.SetMarkerSize(1)
+		b_hist.SetLineWidth( 3)
+		c_hist.SetLineColor( colorind[1])
+		c_hist.SetMarkerColor( colorind[1])
+		c_hist.SetLineWidth( 3)
+		c_hist.SetMarkerStyle(21)
+		c_hist.SetMarkerSize(1)
+		l_hist.SetLineColor( colorind[2])
+		l_hist.SetMarkerColor( colorind[2])
+		l_hist.SetLineWidth( 3)
+		l_hist.SetMarkerStyle(22)
+		l_hist.SetMarkerSize(1)
+
+		legend = ROOT.TLegend(0.5, 0.5, 0.75, 0.75)
+		legend.AddEntry(b_hist, "b-jets", "lp")
+		legend.AddEntry(c_hist, "c-jets", "lp")
+		legend.AddEntry(l_hist, "light-jets", "lp")
+
+		mg = ROOT.TMultiGraph()
+		mg.Add(b_hist)
+		mg.Add(c_hist)
+		mg.Add(l_hist)
+
+		mg.Draw("APL")		
+		mg.GetXaxis().SetTitle("i^{th} track in sequence")
+		mg.GetYaxis().SetTitle("Correlation, #rho(D_{RNN}, "+varname+")")
+
+		legend.Draw("same")
+
+		Atlas.ATLASLabel(0.2, 0.88,0.13, "Simulation Internal",color=1)
+		Atlas.myText(0.2, 0.81 ,color=1, size=0.04,text="#sqrt{s}=13 TeV, t#bar{t}") 
+		Atlas.myText(0.2, 0.75 ,color=1, size=0.04,text="p_{T}>20 GeV, |#eta|<2.5") 
+		#Atlas.myText(0.2, 0.69 ,color=1, size=0.04,text="Rel21") 
+
+		canvas.Draw()
+		canvas.Write()
+		
+#	Comp_Quick_4Class = [SavedModels["V72_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix_JetpTReweight"],
+	Comp_Quick_4Class = [SavedModels["V73_LSTM_dR_60epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix_JetpTReweight"]]
+
+#	Comp_Quick_4Class = [SavedModels["V47_LSTM_dR_50epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix_JetpTReweight"],
+#			     SavedModels["V47_LSTM_LLR_20epoch_2000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_40nLSTMNodes_1nLayers_CMix_JetpTReweight"]]
+
+
+#	Comp_Quick_4Class = [SavedModels["V47_LSTM_dR_50epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix_JetpTReweight"]] #
+
+	#SavedModels["V47_LSTM_pTFrac_50epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix_JetpTReweight"], 
+	# SavedModels["V47_LSTM_IP3D_50epoch_5000kEvts_0nTrackCut_15nMaxTrack_4nLSTMClass_50nLSTMNodes_1nLayers_CMix_JetpTReweight"]]
+
+#	DrawCorrelation(  x_test_dR_post[:,:, 0], labels_test_dR, Comp_Quick_4Class[0], "S_{d0}")
+#	DrawCorrelation(  x_test_dR_post[:,:, 1], labels_test_dR, Comp_Quick_4Class[0], "S_{z0}")
+#	DrawCorrelation(  x_test_dR_post[:,:, 2], labels_test_dR, Comp_Quick_4Class[0], "p_{T} Fraction")
+#	DrawCorrelation(  x_test_dR_post[:,:, 3], labels_test_dR, Comp_Quick_4Class[0], "#Delta R")
 	
 	DrawROC(Comp_Quick_4Class,         "BL_4Class_Layer.root", bkg="l")
 	DrawROC(Comp_Quick_4Class,         "BC_4Class_Layer.root", bkg="c")
 
-	#DrawROC(Comp_Quick_4Class_Hits,         "BL_4Class_Layer_hits.root", bkg="l")
-	#DrawROC(Comp_Quick_4Class_Hits,         "BC_4Class_Layer_hits.root", bkg="c")
-	#DrawFlatEfficiencyCurves(Comp_Quick_4Class,   "RejAtFlatEff_4Class.root")
-	#DrawLEff_pT(  Comp_Quick_4Class, labels_test_dR, pt_test)
-	#DrawBEff_pT(  Comp_Quick_4Class, labels_test_dR, pt_test)
+	DrawFlatEfficiencyCurves(Comp_Quick_4Class,   "RejAtFlatEff_L_4Class.root", "L")
+	DrawFlatEfficiencyCurves(Comp_Quick_4Class,   "RejAtFlatEff_C_4Class.root", "C")
 
-	#DrawLEff_pT(  Comp_Quick_4Class, labels_test_dR, pt_test_Hits)
-	#DrawBEff_pT(  Comp_Quick_4Class, labels_test_dR, pt_test_Hits)
-
-        print "Making b jet efficiency v.s. pT curve ... "
+#	DrawLEff_pT(  Comp_Quick_4Class, labels_test_dR, pt_test)
+#	DrawCEff_pT(  Comp_Quick_4Class, labels_test_dR, pt_test)
+#	DrawBEff_pT(  Comp_Quick_4Class, labels_test_dR, pt_test)
 
 
 ########################################
@@ -1184,4 +1360,3 @@ if __name__ == "__main__":
 			compareROC()
 		if o.Mode == "P":
 			generateOutput()
-
