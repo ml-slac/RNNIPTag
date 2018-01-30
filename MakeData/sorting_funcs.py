@@ -21,28 +21,25 @@ def sort_arrays_in_list(m, index_list, mask_list=[], printInfo=False):
         print mask_list
         print (mask_list != [])
     
-#    for i in range(len(m)):
-#        out_m[i] = m[i][index_list[i]]
-#
-#        if printInfo:
-#            print m[i]
-#            print m[i][index_list[i]]
-#            print mask_list[i]
-#
-#
-#        if len(mask_list) != 0:
-#            out_m[i] = out_m[i][ mask_list[i] ]
-#
-#
-#            if printInfo:
-#                print out_m[i]
-#                if np.count_nonzero( (out_m[i] < 0) ) > 0:
-#                    print m.shape, len(index_list), len(mask_list)
-#                    print m[i][index_list[i]]
-#                    print mask_list[i]
-#                    print out_m[i]
+    for i in range(len(m)):
+        out_m[i] = m[i][index_list[i]]
+        
+        if printInfo:
+            print m[i]
+            print m[i][index_list[i]]
+            print mask_list[i]
 
-    out_m = m[index_list]
+        if len(mask_list) != 0:
+            out_m[i] = out_m[i][ mask_list[i] ]
+
+
+            if printInfo:
+                print out_m[i]
+                if np.count_nonzero( (out_m[i] < 0) ) > 0:
+                    print m.shape, len(index_list), len(mask_list)
+                    print m[i][index_list[i]]
+                    print mask_list[i]
+                    print out_m[i]
 
     return out_m
 
@@ -52,21 +49,24 @@ def get_sort_index_list(m, sort_type=None):
 
     reverse_index = (sort_type.find("rev")!=-1)
 
-#    for ientry in m:
-#        index = None
-#        
-#        if sort_type == None or sort_type == "rev":
-#            index = np.argsort(ientry)
-#
-#        elif sort_type.find("abs") != -1:
-#            index = np.argsort(np.abs(ientry))
-#
-#        else:
-#            print "get_sort_index_list: sort_type",sort_type,"not recognized"
-#            sys.exit(0)
-#        
-#        index_list.append( index[::-1] if reverse_index else index )
+    for ientry in m:
+        index = None
+        
+        if sort_type == None or sort_type == "rev":
+            index = np.argsort(ientry)
 
+        elif sort_type.find("abs") != -1:
+            index = np.argsort(np.abs(ientry))
+
+        else:
+            print "get_sort_index_list: sort_type",sort_type,"not recognized"
+            sys.exit(0)
+        
+        index_list.append( index[::-1] if reverse_index else index )
+    return index_list
+
+'''
+    For Giacinto's private NTUPLE
     index = None
         
     if sort_type == None or sort_type == "rev":
@@ -80,9 +80,9 @@ def get_sort_index_list(m, sort_type=None):
         sys.exit(0)
         
     index_list.append( index[::-1] if reverse_index else index )
+'''
 
 
-    return index_list
 
 def get_neg_mask_list(m):
     out_m = np.copy(m)
